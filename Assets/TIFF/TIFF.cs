@@ -9,13 +9,13 @@ namespace OSC_TIFF
 {
     public class TIFF
     {
-		//Unity Texture
+        //Unity Texture
         Texture2D tex;
-		
-		byte[] data;
-		
+
+        byte[] data;
+
         bool ByteOrder;//true:II  false:MM
-        
+
         public int ImageWidth = 0;
         public int ImageLength = 0;
 
@@ -86,7 +86,7 @@ namespace OSC_TIFF
 
         private int DecodeIFH()
         {
-            string byteOrder = GetString(0,2);
+            string byteOrder = GetString(0, 2);
             if (byteOrder == "II")
                 ByteOrder = true;
             else if (byteOrder == "MM")
@@ -140,170 +140,178 @@ namespace OSC_TIFF
                 case 254: break;//NewSubfileType
                 case 255: break;//SubfileType
                 case 256://ImageWidth
-                        ImageWidth = GetInt(pdata,typesize);break;
+                    ImageWidth = GetInt(pdata, typesize); break;
                 case 257://ImageLength
-                        ImageLength = GetInt(pdata,typesize);break;
+                    ImageLength = GetInt(pdata, typesize); break;
                 case 258://BitsPerSample
                     for (int i = 0; i < Count; i++)
                     {
-                        int v = GetInt(pdata+i*typesize,typesize);
+                        int v = GetInt(pdata + i * typesize, typesize);
                         BitsPerSample.Add(v);
-                        PixelBytes += v/8;
-                    }break;
+                        PixelBytes += v / 8;
+                    }
+                    break;
                 case 259: //Compression
-                    Compression = GetInt(pdata,typesize);break;
-                case 262: //PhotometricInterpretation
-                    PhotometricInterpretation = GetInt(pdata,typesize);break;
+                    Compression = GetInt(pdata, typesize); break;
+                case 262: //PhotometricInterpretation //一般等于1，2基本不用，等于2就不解了
+                    PhotometricInterpretation = GetInt(pdata, typesize); break;
                 case 273://StripOffsets
                     for (int i = 0; i < Count; i++)
                     {
-                        int v = GetInt(pdata+i*typesize,typesize);
+                        int v = GetInt(pdata + i * typesize, typesize);
                         StripOffsets.Add(v);
-                    }break;
+                    }
+                    break;
                 case 274: break;//Orientation
                 case 277: break;//SamplesPerPixel
                 case 278://RowsPerStrip
-                        RowsPerStrip = GetInt(pdata,typesize);break;
+                    RowsPerStrip = GetInt(pdata, typesize); break;
                 case 279://StripByteCounts
                     for (int i = 0; i < Count; i++)
                     {
-                        int v = GetInt(pdata+i*typesize,typesize);
+                        int v = GetInt(pdata + i * typesize, typesize);
                         StripByteCounts.Add(v);
-                    }break;
+                    }
+                    break;
                 case 282: //XResolution
                     XResolution = GetRational(pdata); break;
                 case 283://YResolution
                     YResolution = GetRational(pdata); break;
-                case 284: 
-                    PlannarConfiguration= GetInt(pdata,typesize);break;//PlanarConfig
+                case 284:
+                    PlannarConfiguration = GetInt(pdata, typesize); break;//PlanarConfig
                 case 296://ResolutionUnit
-                    ResolutionUnit = GetInt(pdata,typesize);break;
+                    ResolutionUnit = GetInt(pdata, typesize); break;
                 case 305://Software
-                    Software = GetString(pdata,typesize); break;
+                    Software = GetString(pdata, typesize); break;
                 case 306://DateTime
-                    DateTime = GetString(pdata,typesize); break;
+                    DateTime = GetString(pdata, typesize); break;
                 case 315: break;//Artist
                 case 317: //Differencing Predictor
-                    Predictor = GetInt(pdata,typesize);break;
+                    Predictor = GetInt(pdata, typesize); break;
                 case 320: break;//ColorDistributionTable
                 case 338: break;//ExtraSamples
                 case 339: //SampleFormat
                     for (int i = 0; i < Count; i++)
                     {
-                        int v = GetInt(pdata+i*typesize,typesize);
+                        int v = GetInt(pdata + i * typesize, typesize);
                         SampleFormat.Add(v);
-                    } break;
-                    
+                    }
+                    break;
+
                 default: break;
             }
         }
         private void DecodeStrips()
         {
+            if (BitsPerSample.Count != 0)
+            {
+                int k = 0;
+                int count = -1;
+                for (int i = 0; i < BitsPerSample.Count; i++)
+                {
+                    if (BitsPerSample[i] != k)
+                    {
+                         count++;
+                    }
+                    k = BitsPerSample[i];
+                }
+                if (count > 0)//三个通道大小不一致
+                {
+                    return;//暂不支持
+                }
+            }
+            else
+            {
+                return;
+            }
             int pStrip = 0;
             int size = 0;
-            int f = 1;
-            if(SampleFormat.Count==0)
+            //int f = 1;
+            TextureFormat f = TextureFormat.RGBA32;
+            if (SampleFormat.Count != 0)//默认为unsigned整型
             {
-                tex = new Texture2D(ImageWidth,ImageLength,TextureFormat.RGBA32,false);
+                if (SampleFormat[0] == 2)//有符号整型
+                {
+                    return;//暂不支持
+                }
+                if (SampleFormat[0] == 3)//float
+                {
+                    f = TextureFormat.RGBAFloat;
+                }
             }
-            else if (SampleFormat[0] ==1)
-            {
-                tex = new Texture2D(ImageWidth,ImageLength,TextureFormat.RGBA32,false);
-            }
-            else if (SampleFormat[0] ==3)
-            {
-                 tex = new Texture2D(ImageWidth,ImageLength,TextureFormat.RGBAFloat,false);
-                  f = 3;
-            }
-           
-            Color[] colors = new Color[ImageWidth*ImageLength];
+            tex = new Texture2D(ImageWidth, ImageLength, f, false);
 
+            int PixelCount = ImageWidth * ImageLength;
+            Color[] colors = new Color[PixelCount];
+            int index = PixelCount;
             if (Compression == 5)
             {
                 int stripLength = ImageWidth * RowsPerStrip * BitsPerSample.Count * BitsPerSample[0] / 8;
                 CompressionLZW.CreateBuffer(stripLength);
-                Debug.Log("stripLength : "+stripLength);
-                Debug.Log("ImageWidth : "+ImageWidth);
-                Debug.Log("StripOffsets.Count : "+StripOffsets.Count);
-                Debug.Log("ImageLength : "+ImageLength);
-                Debug.Log("RowsPerStrip : "+RowsPerStrip);
-                Debug.Log("PlannarConfiguration : "+PlannarConfiguration);//2基本不用，等于2就不解了
-                if(Predictor==1)
+                //Debug.Log("PlannarConfiguration : " + PlannarConfiguration);//2基本不用，等于2就不解了
+                if (Predictor == 1)//没有差值处理
                 {
-                    int index = 0;
                     for (int y = 0; y < StripOffsets.Count; y++)
                     {
-                        //Debug.Log("strip : "+i);
                         pStrip = StripOffsets[y];//起始位置
                         size = StripByteCounts[y];//读取长度
                         byte[] Dval = CompressionLZW.Decode(data, pStrip, size);
-                        //Debug.Log(Dval.Length);
-                        if( f == 1)
+
+                        if (f == TextureFormat.RGBA32 && BitsPerSample[0] == 1)
                         {
-                            for(int x = 0;x<ImageWidth*RowsPerStrip;x++)
+                            for (int x = 0; x < ImageWidth * RowsPerStrip; x++)
                             {
-                                int i = BitsPerSample[0]/8;
-                                float R = GetInt(Dval, x * PixelBytes,  i )/255f;
-                                float G = GetInt(Dval, x * PixelBytes+i ,i)/255f;
-                                float B = GetInt(Dval, x * PixelBytes+i+i, i)/255f;
-                                float A =BitsPerSample.Count>3?GetInt(Dval, x * PixelBytes+i+i+i,i)/255f:1.0f;
+                                float R = Dval[x * PixelBytes] / 255f;
+                                float G = Dval[x * PixelBytes + 1] / 255f;
+                                float B = Dval[x * PixelBytes + 2] / 255f;
+                                float A = PixelBytes > 3 ? Dval[x * PixelBytes + 3] / 255f : 1.0f;
                                 //tex.SetPixel(x,y,new Color(R,G,B,A));//可以一个像素一个像素的设置颜色，也可以先读出来再一起设置颜色
-                                colors[index++] = new Color(R,G,B,A);
+                                colors[--index] = new Color(R, G, B, A);//解出来的图像是反着的，改Unity.Color的顺序
                             }
                         }
-                        else if (f == 3)
+                        else if (f == TextureFormat.RGBAFloat)
                         {
-                            for(int x = 0;x<ImageWidth*RowsPerStrip;x++)
+                            for (int x = 0; x < ImageWidth * RowsPerStrip; x++)
                             {
-                                float R = GetFloat(Dval, x * PixelBytes   );
-                                float G = GetFloat(Dval, x * PixelBytes+4 );
-                                float B = GetFloat(Dval, x * PixelBytes+8 );
-                                float A = GetFloat(Dval, x * PixelBytes+12);
-                                //tex.SetPixel(x,y,new Color(R,G,B,A));//可以一个像素一个像素的设置颜色，也可以先读出来再一起设置颜色
-                                colors[index++] = new Color(R,G,B,A);
+                                float R = GetFloat(Dval, x * PixelBytes);
+                                float G = GetFloat(Dval, x * PixelBytes + 4);
+                                float B = GetFloat(Dval, x * PixelBytes + 8);
+                                float A = GetFloat(Dval, x * PixelBytes + 12);
+                                colors[--index] = new Color(R, G, B, A);
                             }
                         }
                     }
-                } 
-                else if(Predictor==2)//差值处理
+                }
+                else if (Predictor == 2)//差值处理
                 {
-                    Debug.Log("Predictor : "+Predictor);
-                    int index = 0;
-                    for (int y = 0; y < StripOffsets.Count; y++)
+                    if (f == TextureFormat.RGBA32 && BitsPerSample[0] == 8)
                     {
-                        //Debug.Log("strip : "+i);
-                        pStrip = StripOffsets[y];//起始位置
-                        size = StripByteCounts[y];//读取长度
-                        byte[] Dval = CompressionLZW.Decode(data, pStrip, size);
-                        //Debug.Log(Dval.Length);
-                        if( f == 1)
+                        for (int y = 0; y < StripOffsets.Count; y++)
                         {
-                            int lr=0,lg=0,lb=0,la=0;
-                            for(int x = 0;x<ImageWidth*RowsPerStrip;x++)
+                            pStrip = StripOffsets[y];//起始位置
+                            size = StripByteCounts[y];//读取长度
+                            byte[] Dval = CompressionLZW.Decode(data, pStrip, size);
+
+                            for(int rows = 0;rows< RowsPerStrip;rows++)
                             {
-                                int i = BitsPerSample[0]/8;
-                                int r = GetInt(Dval, x * PixelBytes,  i )+lr;
-                                int g = GetInt(Dval, x * PixelBytes+i ,i)+lg;
-                                int b = GetInt(Dval, x * PixelBytes+i+i, i)+lb;
-                                int a = BitsPerSample.Count>3?(GetInt(Dval, x * PixelBytes+i+i+i,i)+la):255;
-                                lr = r;
-                                lg = g;
-                                lb = b;
-                                la = a;
-                                colors[index++] = new Color(r/255f,g/255f,b/255f,a/255f);
+                                byte[] last = new byte[4] { 0,0,0,0};
+                                byte max = 255;
+                                int start = ImageWidth * rows ;
+                                int end = ImageWidth * (rows + 1);
+                                for (int x = start; x < end; x++)
+                                {
+                                    byte[] rgba = new byte[4] { 255, 255, 255, 255 };
+                                    
+                                    for (int channel = 0; channel < BitsPerSample.Count; channel++)
+                                    {
+                                        rgba[channel] = Dval[x * PixelBytes + channel];
+                                        rgba[channel] += last[channel];
+                                        last[channel] = rgba[channel];
+                                    }
+                                    colors[--index] = new Color(rgba[0] / 255f, rgba[1] / 255f, rgba[2] / 255f, rgba[3] / 255f);
+                                }
                             }
                         }
-                        // else if (f == 3)
-                        // {
-                        //     for(int x = 0;x<ImageWidth;x++)
-                        //     {
-                        //         float R = GetFloat(Dval, x * PixelBytes   );
-                        //         float G = GetFloat(Dval, x * PixelBytes+4 );
-                        //         float B = GetFloat(Dval, x * PixelBytes+8 );
-                        //         float A = GetFloat(Dval, x * PixelBytes+12);
-                        //         colors[index++] = new Color(R,G,B,A);
-                        //     }
-                        // }
                     }
                 }
             }
@@ -354,7 +362,7 @@ namespace OSC_TIFF
             }
             Debug.Log("SampleFormat: " + tmp);
         }
-        private int GetInt(int startPos, int Length)
+        private int GetInt(int startPos, int Length)//读负数会有问题
         {
             int value = 0;
 
@@ -365,31 +373,31 @@ namespace OSC_TIFF
 
             return value;
         }
-        private int GetInt(byte[] b, int startPos, int Length)
-        {
-            int value = 0;
+        //private int GetInt(byte[] b, int startPos, int Length)
+        //{
+        //    int value = 0;
 
-            if (ByteOrder)// "II")
-                for (int i = 0; i < Length; i++) value |= b[startPos + i] << i * 8;
-            else // "MM")
-                for (int i = 0; i < Length; i++) value |= b[startPos + Length - 1 - i] << i * 8;
+        //    if (ByteOrder)// "II")
+        //        for (int i = 0; i < Length; i++) value |= b[startPos + i] << i * 8;
+        //    else // "MM")
+        //        for (int i = 0; i < Length; i++) value |= b[startPos + Length - 1 - i] << i * 8;
 
-            return value;
-        }
+        //    return value;
+        //}
         private float GetRational(int startPos)
         {
-            int A = GetInt(startPos,4);
-            int B = GetInt(startPos+4,4);
+            int A = GetInt(startPos, 4);
+            int B = GetInt(startPos + 4, 4);
             return A / B;
         }
         private float GetFloat(byte[] b, int startPos)
         {
             byte[] byteTemp;
             if (ByteOrder)// "II")
-                byteTemp =new byte[]{b[startPos],b[startPos+1],b[startPos+2],b[startPos+3]};
+                byteTemp = new byte[] { b[startPos], b[startPos + 1], b[startPos + 2], b[startPos + 3] };
             else
-                byteTemp =new byte[]{b[startPos+3],b[startPos+2],b[startPos+1],b[startPos]};
-            float fTemp = BitConverter.ToSingle(byteTemp,0);
+                byteTemp = new byte[] { b[startPos + 3], b[startPos + 2], b[startPos + 1], b[startPos] };
+            float fTemp = BitConverter.ToSingle(byteTemp, 0);
             return fTemp;
         }
         private string GetString(int startPos, int Length)
@@ -438,7 +446,7 @@ namespace OSC_TIFF
         //         "330","331","332","333","334","335","336","337","ExtraSamples","SampleFormat"
         //     //"330","331","332","333","334","335","336","337","338","339",
         //     };
-        
+
         // static private string Tag(int i)
         // {
         //     if (i <= 339)
@@ -446,7 +454,7 @@ namespace OSC_TIFF
         //     else
         //         return i.ToString();
         // }
-        
+
     }
 }
 
