@@ -9,7 +9,7 @@ public class ShowTIFF : MonoBehaviour {
 		MeshRenderer r =transform.GetComponent<MeshRenderer>();
 		//r.material= new Material(Shader.Find("Custom/QuadImage"));
 		Material m = r.material;
-		string FileName = Application.dataPath+"/Data/1.tif";
+		string FileName = Application.dataPath+"/Data/2.tiff";
 		TIFF tiff = new TIFF();
 		tiff.Init(FileName);
 		//tiff.PrintInfo();

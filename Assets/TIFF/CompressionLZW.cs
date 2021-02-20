@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
 using System;
 using UnityEngine;
@@ -22,7 +22,6 @@ namespace OSC_TIFF
 		static private int resIndex;
 		static private int current=0;
 		static private int bitsCount = 0;
-		static private string OutputStr="";
 		static string combine ="{0}{1}";
 		//delegate int GetBitFunc(int x);
 		//static GetBitFunc[] GetBitFuncs = new GetBitFunc[]{GetBit0,GetBit1};
@@ -31,11 +30,12 @@ namespace OSC_TIFF
             OldCode = 256;
             DicIndex = 0;
             current = 0;
-            OutputStr = "";
 			resIndex = 0;
 		}
+		static int BufferSize = 0;
 		static public void CreateBuffer(int size)
 		{
+			BufferSize=size;
 			Output = new byte[size];
 			DicIndex = 0;
             while (DicIndex < 256)
@@ -134,7 +134,18 @@ namespace OSC_TIFF
 		static private void WriteResult(string code)
 		{
 			for(int i = 0;i<code.Length;i++)
-			Output[resIndex++] = (byte)code[i];
+			{
+				if(resIndex>=BufferSize)
+				{
+					Debug.Log(resIndex);
+					resIndex++;
+				}
+				else
+				Output[resIndex++] = (byte)code[i];
+			}
+			
+			
+			
 		}
     }
 }
