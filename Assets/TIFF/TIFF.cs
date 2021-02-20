@@ -7,8 +7,6 @@ using System.IO;
 
 namespace OSC_TIFF
 {
-
-
     public class TIFF
     {
 		//Unity Texture
@@ -71,12 +69,16 @@ namespace OSC_TIFF
 
             //首先解码文件头，获得编码方式是大端还是小端，以及第一个IFD的位置
             int pIFD = DecodeIFH();
+            int i = 0;
+
 
             //然后解码第一个IFD，返回值是下一个IFD的地址
             while (pIFD != 0)
             {
                 pIFD = DecodeIFD(pIFD);
+                i++;
             }
+            Debug.Log(i);
         }
         public Texture2D GetUnityTexture()
         {
