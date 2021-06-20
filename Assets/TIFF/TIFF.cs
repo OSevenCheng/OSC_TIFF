@@ -7,8 +7,37 @@ using System.IO;
 
 namespace OSC_TIFF
 {
+    public class Image_Type
+    {
+        TextureFormat uFormat;
+        int samplerFormat;
+        int samplerCount;
+        int bitsPerSample;
+        public Image_Type(int _SamplerCount, int _SamplerFormat,int _BitsPerSample, TextureFormat _uFormat)
+        {
+            uFormat = _uFormat;
+            samplerFormat = _SamplerFormat;
+            samplerCount = _SamplerCount;
+            bitsPerSample = _BitsPerSample;
+        }
+    }
     public class TIFF
     {
+        public TIFF()
+        {
+            List<Image_Type> image_Types = new List<Image_Type>();
+            image_Types.Add(new Image_Type(1, 1, 8, TextureFormat.R8));
+            image_Types.Add(new Image_Type(1, 1, 16, TextureFormat.R16));
+            image_Types.Add(new Image_Type(1, 3, 32, TextureFormat.RFloat));
+
+            image_Types.Add(new Image_Type(3, 1,  8, TextureFormat.RGB24));
+
+            image_Types.Add(new Image_Type(4, 1,  4, TextureFormat.RGBA4444));
+            image_Types.Add(new Image_Type(4, 1,  8, TextureFormat.RGBA32));
+            image_Types.Add(new Image_Type(4, 3, 16, TextureFormat.RGBAHalf));
+            image_Types.Add(new Image_Type(4, 3, 32, TextureFormat.RGBAFloat));
+
+        }
         //Unity Texture
         Texture2D tex;
 
@@ -20,6 +49,9 @@ namespace OSC_TIFF
         public int ImageLength = 0;
 
         public List<int> BitsPerSample = new List<int>();
+        public int BytesPerSample = 0;
+        public int ChannelCount = 0;
+        public bool SameBitsPerChannel = true;
         public int PixelBytes = 0;
         public int Compression = 0;
 
@@ -144,11 +176,26 @@ namespace OSC_TIFF
                 case 257://ImageLength
                     ImageLength = GetInt(pdata, typesize); break;
                 case 258://BitsPerSample
+                    int temp = 0;
+                    int count = -1;
                     for (int i = 0; i < Count; i++)
                     {
                         int v = GetInt(pdata + i * typesize, typesize);
                         BitsPerSample.Add(v);
                         PixelBytes += v / 8;
+                        if (v != temp)
+                            count++;
+                        temp = v;
+                    }
+                    if (count > 0)//三个通道大小不一致
+                    {
+                        throw new UnityException("三个通道大小不一致，暂不支持");//暂不支持
+                    }
+                    ChannelCount = BitsPerSample.Count;
+                    BytesPerSample = BitsPerSample[0] / 8;//不支持4-bits per channel
+                    if (BitsPerSample[0] < 8)
+                    {
+                        throw new UnityException("单个通道小于8bits,暂不支持");//暂不支持
                     }
                     break;
                 case 259: //Compression
@@ -213,7 +260,7 @@ namespace OSC_TIFF
                 for (int i = 0; i < BitsPerSample.Count; i++)
                 {
                     if (BitsPerSample[i] != temp)
-                         count++;
+                        count++;
                     temp = BitsPerSample[i];
                 }
                 if (count > 0)//三个通道大小不一致
@@ -242,7 +289,7 @@ namespace OSC_TIFF
             }
             else if (SampleFormat.Count == 1)
             {
-                switch(SampleFormat[0])
+                switch (SampleFormat[0])
                 {
                     case 1:
                         f = TextureFormat.R16;
@@ -255,8 +302,8 @@ namespace OSC_TIFF
                 }
 
             }
-            tex = new Texture2D(ImageWidth, ImageLength, f, false);
-            //tex = new Texture2D(500, 500, TextureFormat.RGBAFloat, false);
+            //tex = new Texture2D(ImageWidth, ImageLength, f, false);
+            tex = new Texture2D(ImageWidth, ImageLength, TextureFormat.RGBAFloat, false);
             int PixelCount = ImageWidth * ImageLength;
             Color[] colors = new Color[PixelCount];
             int index = PixelCount;
@@ -267,104 +314,89 @@ namespace OSC_TIFF
                 //Debug.Log("PlannarConfiguration : " + PlannarConfiguration);//2基本不用，等于2就不解了
                 if (Predictor == 1)//没有差值处理
                 {
-                    for (int y = 0; y < StripOffsets.Count; y++)
+                    if (SampleFormat[0] == 1) //unsigned int
                     {
-                        pStrip = StripOffsets[y];//起始位置
-                        size = StripByteCounts[y];//读取长度
-                        byte[] Dval = CompressionLZW.Decode(data, pStrip, size);
-
-                        if (f == TextureFormat.RGBA32 && BitsPerSample[0] == 1)
-                        {
-                            for (int x = 0; x < ImageWidth * RowsPerStrip; x++)
-                            {
-                                float R = Dval[x * PixelBytes] / 255f;
-                                float G = Dval[x * PixelBytes + 1] / 255f;
-                                float B = Dval[x * PixelBytes + 2] / 255f;
-                                float A = PixelBytes > 3 ? Dval[x * PixelBytes + 3] / 255f : 1.0f;
-                                //tex.SetPixel(x,y,new Color(R,G,B,A));//可以一个像素一个像素的设置颜色，也可以先读出来再一起设置颜色
-                                colors[--index] = new Color(R, G, B, A);//解出来的图像是反着的，改Unity.Color的顺序
-                            }
-                        }
-                        else if (f == TextureFormat.RGBAFloat)
-                        {
-                            for (int x = 0; x < ImageWidth * RowsPerStrip; x++)
-                            {
-                                float R = GetFloat(Dval, x * PixelBytes);
-                                float G = GetFloat(Dval, x * PixelBytes + 4);
-                                float B = GetFloat(Dval, x * PixelBytes + 8);
-                                float A = GetFloat(Dval, x * PixelBytes + 12);
-                                colors[--index] = new Color(R, G, B, A);
-                            }
-                        }
+                        ByteArryToColorArray(colors, ref index, ByteArrayToIntColor);
+                    }
+                    else if (SampleFormat[0] == 3) //f == TextureFormat.RGBAFloat)
+                    {
+                        ByteArryToColorArray(colors, ref index, ByteArrayToFloatColor);
                     }
                 }
                 else if (Predictor == 2)//差值处理
                 {
-                    if (f == TextureFormat.RGBA32 && BitsPerSample[0] == 8)
-                    {
-                        for (int y = 0; y < StripOffsets.Count; y++)
-                        {
-                            pStrip = StripOffsets[y];//起始位置
-                            size = StripByteCounts[y];//读取长度
-                            byte[] Dval = CompressionLZW.Decode(data, pStrip, size);
-
-                            for (int rows = 0; rows < RowsPerStrip; rows++)
-                            {
-                                byte[] last = new byte[4] { 0, 0, 0, 0 };
-                                byte max = 255;
-                                int start = ImageWidth * rows;
-                                int end = ImageWidth * (rows + 1);
-                                for (int x = start; x < end; x++)
-                                {
-                                    byte[] rgba = new byte[4] { 255, 255, 255, 255 };
-
-                                    for (int channel = 0; channel < BitsPerSample.Count; channel++)
-                                    {
-                                        rgba[channel] = Dval[x * PixelBytes + channel];
-                                        rgba[channel] += last[channel];
-                                        last[channel] = rgba[channel];
-                                    }
-                                    colors[--index] = new Color(rgba[0] / 255f, rgba[1] / 255f, rgba[2] / 255f, rgba[3] / 255f);
-                                }
-                            }
-                        }
-                    }
+                    ByteArryToColorArrayPredicted(colors, ref index, ByteArrayToIntColor);
                 }
                 else if (Predictor == 3)//浮点数的差值处理
                 {
-                    if (f == TextureFormat.RFloat)
-                    {
-                        for (int y = 0; y < StripOffsets.Count; y++)
-                        {
-                            pStrip = StripOffsets[y];//起始位置
-                            size = StripByteCounts[y];//读取长度
-                            byte[] Dval = CompressionLZW.Decode(data, pStrip, size);
-
-                            for (int rows = 0; rows < RowsPerStrip; rows++)
-                            {
-                                float last = 0;
-                                int start = ImageWidth * rows;
-                                int end = ImageWidth * (rows + 1);
-                                for (int x = start; x < end; x++)
-                                {
-                                    float r = 0f;
-                                     //r = BitConverter.ToSingle(Dval, x * PixelBytes);
-                                   r = GetFloat(Dval, x * PixelBytes);
-                                    r += last;
-                                    last = r;
-                                    
-                                    //colors[--index] = new Color(r,r,r);
-                                        tex.SetPixel(x, y, new Color(r, r, r, 1f));//可以一个像素一个像素的设置颜色，也可以先读出来再一起设置颜色
-                                    //colors[--index] = new Color(r, 1f, 1f, 1f);
-                                }
-                            }
-                        }
-                    }
+                    ByteArryToColorArrayPredicted(colors, ref index);
                 }
-            
+
             }
             tex.SetPixels(colors);
             tex.Apply();
+        }
+        private delegate float ByteArryToColorChannel(byte[] b, int startPos, int Length);
+        private void ByteArryToColorArray(Color[] dst, ref int index, ByteArryToColorChannel BACC)
+        {
+            for (int y = 0; y < StripOffsets.Count; y++)
+            {
+                byte[] Dval = CompressionLZW.Decode(data, StripOffsets[y], StripByteCounts[y]);//原始数据//起始位置//读取长度
+                float[] RGBA = new float[] { 0f, 0f, 0f, 1f };
+                for (int x = 0; x < ImageWidth * RowsPerStrip; x++)
+                {
+                    for (int c = 0; c < BitsPerSample.Count; c++)
+                    {
+                        RGBA[c] = BACC(Dval, x * PixelBytes + c * BytesPerSample, BytesPerSample);
+                    }
+                    //tex.SetPixel(x,y,new Color(R,G,B,A));//可以一个像素一个像素的设置颜色，也可以先读出来再一起设置颜色
+                    dst[--index] = new Color(RGBA[0], RGBA[1], RGBA[2], RGBA[3]);//解出来的图像是反着的，改Unity.Color的顺序
+                }
+            }
+        }
+        private void ByteArryToColorArrayPredicted(Color[] dst, ref int index, ByteArryToColorChannel BACC)
+        {
+            for (int y = 0; y < StripOffsets.Count; y++)
+            {
+                byte[] Dval = CompressionLZW.Decode(data, StripOffsets[y], StripByteCounts[y]);//原始数据//起始位置//读取长度
+                float[] RGBA = new float[] { 0f, 0f, 0f, 1f };
+                float[] LastRGBA = new float[] { 0f, 0f, 0f, 0f };
+                for (int x = 0; x < ImageWidth * RowsPerStrip; x++)
+                {
+                    for (int c = 0; c < BitsPerSample.Count; c++)
+                    {
+                        RGBA[c] = LastRGBA[c] + BACC(Dval, x * PixelBytes + c * BytesPerSample, BytesPerSample);
+                        LastRGBA[c] = RGBA[c];
+                    }
+                    dst[--index] = new Color(RGBA[0], RGBA[1], RGBA[2], RGBA[3]);
+                }
+            }
+        }
+        private void ByteArryToColorArrayPredicted(Color[] dst, ref int index)
+        {
+            for (int y = 0; y < StripOffsets.Count; y++)
+            {
+                byte[] Dval = CompressionLZW.Decode(data, StripOffsets[y], StripByteCounts[y]);//原始数据//起始位置//读取长度
+                byte[] R = new byte[] { 0,0,0,0};
+                float[] LastR = new float[] { 0f, 0f, 0f, 0f };
+                for (int x = 0; x < ImageWidth * RowsPerStrip; x++)
+                {
+                    for (int c = 0; c < 4; c++)
+                    {
+                        R[c] = (byte)(LastR[c] + Dval[x+c*ImageWidth]);
+                        LastR[c] = R[c];
+                        //R[c] = Dval[x + c * ImageWidth];
+                        
+                    }
+                    byte[] byteTemp;
+                    //if (!ByteOrder)// "II")
+                    //    byteTemp = new byte[] { R[0], R[1], R[2], R[3] };
+                    //else
+                        byteTemp = new byte[] { R[3], R[2], R[1], R[0] };
+                    float fTemp = BitConverter.ToSingle(byteTemp, 0);
+                    dst[--index] = new Color(fTemp, fTemp, fTemp, 1f);
+                }
+            }
         }
         private byte[] DecompressLZW(byte[] val)
         {
@@ -420,6 +452,50 @@ namespace OSC_TIFF
                 for (int i = 0; i < Length; i++) value |= data[startPos + Length - 1 - i] << i * 8;
 
             return value;
+        }
+
+        private float ByteArrayToIntColor(byte[] b, int startPos, int Length)
+        {
+            int value = 0;
+
+            if (ByteOrder)// "II")
+                for (int i = 0; i < Length; i++) value |= b[startPos + i] << i * 8;
+            else // "MM")
+                for (int i = 0; i < Length; i++) value |= b[startPos + Length - 1 - i] << i * 8;
+
+            return value/255f;
+        }
+        private float ByteArrayToFloatColor(byte[] b, int startPos, int Length)
+        {
+            if (Length < 4)
+            {
+                throw new UnityException("浮点数不支持非 32 bits");
+            }
+                
+            byte[] byteTemp;
+            if (ByteOrder)// "II")
+                byteTemp = new byte[] { b[startPos], b[startPos + 1], b[startPos + 2], b[startPos + 3] };
+            else
+                byteTemp = new byte[] { b[startPos + 3], b[startPos + 2], b[startPos + 1], b[startPos] };
+            float fTemp = BitConverter.ToSingle(byteTemp, 0);
+
+            return fTemp;
+        }
+        private float ByteArrayToFloatColorPredict(byte[] b, int startPos, int Length)
+        {
+            if (Length < 4)
+            {
+                throw new UnityException("浮点数不支持非 32 bits");
+            }
+
+            byte[] byteTemp;
+            if (ByteOrder)// "II")
+                byteTemp = new byte[] { b[startPos], b[startPos + ImageWidth], b[startPos + 2*ImageWidth], b[startPos + 3*ImageWidth] };
+            else
+                byteTemp = new byte[] { b[startPos + 3 * ImageWidth], b[startPos + 2 * ImageWidth], b[startPos + ImageWidth], b[startPos] };
+            float fTemp = BitConverter.ToSingle(byteTemp, 0);
+
+            return fTemp;
         }
         //private int GetInt(byte[] b, int startPos, int Length)
         //{
@@ -480,7 +556,7 @@ namespace OSC_TIFF
             public string name;
             public int size;
         }
-
+     
         //用来输出
         // static private string[] TagArray = {//254
         //         "NewSubfileType","SubfileType","ImageWidth","ImageLength","BitsPerSample","Compression",
