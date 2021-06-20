@@ -363,7 +363,7 @@ namespace OSC_TIFF
                 }
             
             }
-            //tex.SetPixels(colors);
+            tex.SetPixels(colors);
             tex.Apply();
         }
         private byte[] DecompressLZW(byte[] val)
@@ -441,7 +441,7 @@ namespace OSC_TIFF
         private float GetFloat(byte[] b, int startPos)
         {
             byte[] byteTemp;
-            if (!ByteOrder)// "II")
+            if (ByteOrder)// "II")
                 byteTemp = new byte[] { b[startPos], b[startPos + 1], b[startPos + 2], b[startPos + 3] };
             else
                 byteTemp = new byte[] { b[startPos + 3], b[startPos + 2], b[startPos + 1], b[startPos] };
