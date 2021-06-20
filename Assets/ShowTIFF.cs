@@ -9,12 +9,12 @@ public class ShowTIFF : MonoBehaviour {
 		MeshRenderer r =transform.GetComponent<MeshRenderer>();
 		//r.material= new Material(Shader.Find("Custom/QuadImage"));
 		Material m = r.material;
-		string FileName = Application.dataPath+"/Data/2.tiff";
+		string FileName = Application.dataPath+ "/Data/2020_07_21_index_blue.tif";
 		TIFF tiff = new TIFF();
 		tiff.Init(FileName);
 		//tiff.PrintInfo();
-         
-		Texture2D tex = tiff.GetUnityTexture();
+		tiff.PrintInfo();
+	   Texture2D tex = tiff.GetUnityTexture();
 		m.SetTexture("_MainTex",tex);
 		
 	}

@@ -198,22 +198,23 @@ namespace OSC_TIFF
                     }
                     break;
 
-                default: break;
+                default:
+                    Debug.LogError(TagIndex);
+                    break;
             }
         }
         private void DecodeStrips()
         {
             if (BitsPerSample.Count != 0)
             {
-                int k = 0;
+                //若有多个通道，判断多个通道大小是否一致
+                int temp = 0;
                 int count = -1;
                 for (int i = 0; i < BitsPerSample.Count; i++)
                 {
-                    if (BitsPerSample[i] != k)
-                    {
+                    if (BitsPerSample[i] != temp)
                          count++;
-                    }
-                    k = BitsPerSample[i];
+                    temp = BitsPerSample[i];
                 }
                 if (count > 0)//三个通道大小不一致
                 {
@@ -227,8 +228,8 @@ namespace OSC_TIFF
             int pStrip = 0;
             int size = 0;
             //int f = 1;
-            TextureFormat f = TextureFormat.RGBA32;
-            if (SampleFormat.Count != 0)//默认为unsigned整型
+            TextureFormat f = TextureFormat.RGBA32;//默认为4通道unsigned整型
+            if (SampleFormat.Count == 4)
             {
                 if (SampleFormat[0] == 2)//有符号整型
                 {
@@ -239,8 +240,23 @@ namespace OSC_TIFF
                     f = TextureFormat.RGBAFloat;
                 }
             }
-            tex = new Texture2D(ImageWidth, ImageLength, f, false);
+            else if (SampleFormat.Count == 1)
+            {
+                switch(SampleFormat[0])
+                {
+                    case 1:
+                        f = TextureFormat.R16;
+                        break;
+                    case 3:
+                        f = TextureFormat.RFloat;
+                        break;
+                    default:
+                        return;
+                }
 
+            }
+            tex = new Texture2D(ImageWidth, ImageLength, f, false);
+            //tex = new Texture2D(500, 500, TextureFormat.RGBAFloat, false);
             int PixelCount = ImageWidth * ImageLength;
             Color[] colors = new Color[PixelCount];
             int index = PixelCount;
@@ -292,16 +308,16 @@ namespace OSC_TIFF
                             size = StripByteCounts[y];//读取长度
                             byte[] Dval = CompressionLZW.Decode(data, pStrip, size);
 
-                            for(int rows = 0;rows< RowsPerStrip;rows++)
+                            for (int rows = 0; rows < RowsPerStrip; rows++)
                             {
-                                byte[] last = new byte[4] { 0,0,0,0};
+                                byte[] last = new byte[4] { 0, 0, 0, 0 };
                                 byte max = 255;
-                                int start = ImageWidth * rows ;
+                                int start = ImageWidth * rows;
                                 int end = ImageWidth * (rows + 1);
                                 for (int x = start; x < end; x++)
                                 {
                                     byte[] rgba = new byte[4] { 255, 255, 255, 255 };
-                                    
+
                                     for (int channel = 0; channel < BitsPerSample.Count; channel++)
                                     {
                                         rgba[channel] = Dval[x * PixelBytes + channel];
@@ -314,8 +330,40 @@ namespace OSC_TIFF
                         }
                     }
                 }
+                else if (Predictor == 3)//浮点数的差值处理
+                {
+                    if (f == TextureFormat.RFloat)
+                    {
+                        for (int y = 0; y < StripOffsets.Count; y++)
+                        {
+                            pStrip = StripOffsets[y];//起始位置
+                            size = StripByteCounts[y];//读取长度
+                            byte[] Dval = CompressionLZW.Decode(data, pStrip, size);
+
+                            for (int rows = 0; rows < RowsPerStrip; rows++)
+                            {
+                                float last = 0;
+                                int start = ImageWidth * rows;
+                                int end = ImageWidth * (rows + 1);
+                                for (int x = start; x < end; x++)
+                                {
+                                    float r = 0f;
+                                     //r = BitConverter.ToSingle(Dval, x * PixelBytes);
+                                   r = GetFloat(Dval, x * PixelBytes);
+                                    r += last;
+                                    last = r;
+                                    
+                                    //colors[--index] = new Color(r,r,r);
+                                        tex.SetPixel(x, y, new Color(r, r, r, 1f));//可以一个像素一个像素的设置颜色，也可以先读出来再一起设置颜色
+                                    //colors[--index] = new Color(r, 1f, 1f, 1f);
+                                }
+                            }
+                        }
+                    }
+                }
+            
             }
-            tex.SetPixels(colors);
+            //tex.SetPixels(colors);
             tex.Apply();
         }
         private byte[] DecompressLZW(byte[] val)
@@ -393,7 +441,7 @@ namespace OSC_TIFF
         private float GetFloat(byte[] b, int startPos)
         {
             byte[] byteTemp;
-            if (ByteOrder)// "II")
+            if (!ByteOrder)// "II")
                 byteTemp = new byte[] { b[startPos], b[startPos + 1], b[startPos + 2], b[startPos + 3] };
             else
                 byteTemp = new byte[] { b[startPos + 3], b[startPos + 2], b[startPos + 1], b[startPos] };
