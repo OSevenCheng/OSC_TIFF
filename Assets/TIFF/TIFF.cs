@@ -50,7 +50,7 @@ namespace OSC_TIFF
 
         public List<int> BitsPerSample = new List<int>();
         public int BytesPerSample = 0;
-        public int ChannelCount = 0;
+        public int SamplePerPixel = 0;
         public bool SameBitsPerChannel = true;
         public int PixelBytes = 0;
         public int Compression = 0;
@@ -97,6 +97,8 @@ namespace OSC_TIFF
         public string DateTime = "";
         public string Software = "";
 
+        //GeoTiff
+        public double[] ModelPixelScaleTag = new double[] { 0.0, 0.0, 0.0};
         public void Init(string path)
         {
             data = File.ReadAllBytes(path);
@@ -191,7 +193,7 @@ namespace OSC_TIFF
                     {
                         throw new UnityException("三个通道大小不一致，暂不支持");//暂不支持
                     }
-                    ChannelCount = BitsPerSample.Count;
+                    SamplePerPixel = BitsPerSample.Count;
                     BytesPerSample = BitsPerSample[0] / 8;//不支持4-bits per channel
                     if (BitsPerSample[0] < 8)
                     {
@@ -201,7 +203,10 @@ namespace OSC_TIFF
                 case 259: //Compression
                     Compression = GetInt(pdata, typesize); break;
                 case 262: //PhotometricInterpretation //一般等于1，2基本不用，等于2就不解了
-                    PhotometricInterpretation = GetInt(pdata, typesize); break;
+                    PhotometricInterpretation = GetInt(pdata, typesize);
+                    if(PhotometricInterpretation==3)
+                        throw new UnityException("PhotometricInterpretation暂不支持");//暂不支持
+                    break;
                 case 273://StripOffsets
                     for (int i = 0; i < Count; i++)
                     {
@@ -210,7 +215,9 @@ namespace OSC_TIFF
                     }
                     break;
                 case 274: break;//Orientation
-                case 277: break;//SamplesPerPixel
+                case 277:
+                    SamplePerPixel = GetInt(pdata, typesize);
+                    break;//SamplesPerPixel
                 case 278://RowsPerStrip
                     RowsPerStrip = GetInt(pdata, typesize); break;
                 case 279://StripByteCounts
@@ -225,7 +232,10 @@ namespace OSC_TIFF
                 case 283://YResolution
                     YResolution = GetRational(pdata); break;
                 case 284:
-                    PlannarConfiguration = GetInt(pdata, typesize); break;//PlanarConfig
+                    PlannarConfiguration = GetInt(pdata, typesize);
+                    if(PlannarConfiguration!=1)
+                        throw new UnityException("PlannarConfiguration != 1 暂不支持");//暂不支持
+                    break;//ExtraSamplesbreak;//PlanarConfig
                 case 296://ResolutionUnit
                     ResolutionUnit = GetInt(pdata, typesize); break;
                 case 305://Software
@@ -235,8 +245,12 @@ namespace OSC_TIFF
                 case 315: break;//Artist
                 case 317: //Differencing Predictor
                     Predictor = GetInt(pdata, typesize); break;
-                case 320: break;//ColorDistributionTable
-                case 338: break;//ExtraSamples
+                case 320:
+                    throw new UnityException("ColorMap暂不支持");//暂不支持
+                    break;//ExtraSamplesbreak;//ColorMap
+                case 338:
+                    //throw new UnityException("ExtraSamples暂不支持");//暂不支持
+                    break;//ExtraSamples
                 case 339: //SampleFormat
                     for (int i = 0; i < Count; i++)
                     {
@@ -244,7 +258,25 @@ namespace OSC_TIFF
                         SampleFormat.Add(v);
                     }
                     break;
+                case 33550://ModelPixelScaleTag
+                    if(typesize!=8)
+                    {
+                        throw new UnityException("ModelPixelScaleTag not Double暂不支持");//暂不支持
+                    }
+                    for (int i = 0; i < Count; i++)
+                        ModelPixelScaleTag[i] = GetDouble(pdata + i * typesize);
+                    break;
+                case 33922://ModelTiepointTag double 6*K
 
+                    break;
+                case 34735://GeoKeyDirectionTag short >=4
+
+                    break;
+                case 34737://GeoAsciiParamsTag ASCII N
+
+                    break;
+                case 42113://GDAL_NODATA ASCII N
+                    break;
                 default:
                     Debug.LogError(TagIndex);
                     break;
@@ -304,6 +336,7 @@ namespace OSC_TIFF
             }
             //tex = new Texture2D(ImageWidth, ImageLength, f, false);
             tex = new Texture2D(ImageWidth, ImageLength, TextureFormat.RGBAFloat, false);
+            //tex = new Texture2D(1000, 1000, TextureFormat.RGBAFloat, false);
             int PixelCount = ImageWidth * ImageLength;
             Color[] colors = new Color[PixelCount];
             int index = PixelCount;
@@ -316,28 +349,30 @@ namespace OSC_TIFF
                 {
                     if (SampleFormat[0] == 1) //unsigned int
                     {
-                        ByteArryToColorArray(colors, ref index, ByteArrayToIntColor);
+                        ByteArrayToColorArray(colors, ref index, ByteArrayToIntColor);
                     }
                     else if (SampleFormat[0] == 3) //f == TextureFormat.RGBAFloat)
                     {
-                        ByteArryToColorArray(colors, ref index, ByteArrayToFloatColor);
+                        ByteArrayToColorArray(colors, ref index, ByteArrayToFloatColor);
                     }
                 }
                 else if (Predictor == 2)//差值处理
                 {
-                    ByteArryToColorArrayPredicted(colors, ref index, ByteArrayToIntColor);
+                    throw new UnityException("Predictor == 2暂不支持");//暂不支持
                 }
                 else if (Predictor == 3)//浮点数的差值处理
                 {
-                    ByteArryToColorArrayPredicted(colors, ref index);
+                    if(BitsPerSample.Count>1)
+                        throw new UnityException("Predictor == 2暂不支持");//暂不支持
+                    ByteArrayToColorArrayPredicted(colors, ref index, ByteArrayToFloatColorPredict);
                 }
 
             }
             tex.SetPixels(colors);
             tex.Apply();
         }
-        private delegate float ByteArryToColorChannel(byte[] b, int startPos, int Length);
-        private void ByteArryToColorArray(Color[] dst, ref int index, ByteArryToColorChannel BACC)
+        private delegate float ByteArrayToColorChannel(byte[] b, int startPos, int Length);
+        private void ByteArrayToColorArray(Color[] dst, ref int index, ByteArrayToColorChannel BACC)
         {
             for (int y = 0; y < StripOffsets.Count; y++)
             {
@@ -354,47 +389,19 @@ namespace OSC_TIFF
                 }
             }
         }
-        private void ByteArryToColorArrayPredicted(Color[] dst, ref int index, ByteArryToColorChannel BACC)
+        private void ByteArrayToColorArrayPredicted(Color[] dst, ref int index, ByteArrayToColorChannel BACC)
         {
-            for (int y = 0; y < StripOffsets.Count; y++)
+            for (int y = 0; y <StripOffsets.Count/*1000 */; y++)
             {
                 byte[] Dval = CompressionLZW.Decode(data, StripOffsets[y], StripByteCounts[y]);//原始数据//起始位置//读取长度
-                float[] RGBA = new float[] { 0f, 0f, 0f, 1f };
-                float[] LastRGBA = new float[] { 0f, 0f, 0f, 0f };
+                int SampleStride = BitsPerSample.Count;
+                for(int i = 0;i<BytesPerSample*RowsPerStrip*ImageWidth-1;i++)
+                    Dval[SampleStride+i] = (byte)((Dval[SampleStride+i] + Dval[i]) & 0xff);
+
                 for (int x = 0; x < ImageWidth * RowsPerStrip; x++)
                 {
-                    for (int c = 0; c < BitsPerSample.Count; c++)
-                    {
-                        RGBA[c] = LastRGBA[c] + BACC(Dval, x * PixelBytes + c * BytesPerSample, BytesPerSample);
-                        LastRGBA[c] = RGBA[c];
-                    }
-                    dst[--index] = new Color(RGBA[0], RGBA[1], RGBA[2], RGBA[3]);
-                }
-            }
-        }
-        private void ByteArryToColorArrayPredicted(Color[] dst, ref int index)
-        {
-            for (int y = 0; y < StripOffsets.Count; y++)
-            {
-                byte[] Dval = CompressionLZW.Decode(data, StripOffsets[y], StripByteCounts[y]);//原始数据//起始位置//读取长度
-                byte[] R = new byte[] { 0,0,0,0};
-                float[] LastR = new float[] { 0f, 0f, 0f, 0f };
-                for (int x = 0; x < ImageWidth * RowsPerStrip; x++)
-                {
-                    for (int c = 0; c < 4; c++)
-                    {
-                        R[c] = (byte)(LastR[c] + Dval[x+c*ImageWidth]);
-                        LastR[c] = R[c];
-                        //R[c] = Dval[x + c * ImageWidth];
-                        
-                    }
-                    byte[] byteTemp;
-                    //if (!ByteOrder)// "II")
-                    //    byteTemp = new byte[] { R[0], R[1], R[2], R[3] };
-                    //else
-                        byteTemp = new byte[] { R[3], R[2], R[1], R[0] };
-                    float fTemp = BitConverter.ToSingle(byteTemp, 0);
-                    dst[--index] = new Color(fTemp, fTemp, fTemp, 1f);
+                    float col = BACC(Dval, x, BytesPerSample);
+                    dst[--index] = new Color(col, col, col, 1f);
                 }
             }
         }
@@ -441,6 +448,12 @@ namespace OSC_TIFF
                 tmp += " ";
             }
             Debug.Log("SampleFormat: " + tmp);
+            Debug.Log("PlannarConfiguration: " + PlannarConfiguration);
+            Debug.Log("SamplePerPixel: " + SamplePerPixel);
+
+            Debug.Log("ModelPixelScaleTag: " + ModelPixelScaleTag[0] + " " +
+                   ModelPixelScaleTag[1] + " " +
+                  ModelPixelScaleTag[2]);
         }
         private int GetInt(int startPos, int Length)//读负数会有问题
         {
@@ -489,7 +502,7 @@ namespace OSC_TIFF
             }
 
             byte[] byteTemp;
-            if (ByteOrder)// "II")
+            if (!ByteOrder)// "II")
                 byteTemp = new byte[] { b[startPos], b[startPos + ImageWidth], b[startPos + 2*ImageWidth], b[startPos + 3*ImageWidth] };
             else
                 byteTemp = new byte[] { b[startPos + 3 * ImageWidth], b[startPos + 2 * ImageWidth], b[startPos + ImageWidth], b[startPos] };
@@ -522,6 +535,18 @@ namespace OSC_TIFF
             else
                 byteTemp = new byte[] { b[startPos + 3], b[startPos + 2], b[startPos + 1], b[startPos] };
             float fTemp = BitConverter.ToSingle(byteTemp, 0);
+            return fTemp;
+        }
+        private double GetDouble(int startPos)
+        {
+            byte[] byteTemp;
+            if (ByteOrder)// "II")
+                byteTemp = new byte[] { data[startPos], data[startPos + 1], data[startPos + 2], data[startPos + 3],
+                data[startPos+4], data[startPos + 5], data[startPos + 6], data[startPos + 7],};
+            else
+                byteTemp = new byte[] { data[startPos + 7], data[startPos + 6], data[startPos + 5], data[startPos + 4],
+                data[startPos + 3], data[startPos + 2], data[startPos + 1], data[startPos] };
+            double fTemp = BitConverter.ToDouble(byteTemp, 0);
             return fTemp;
         }
         private string GetString(int startPos, int Length)

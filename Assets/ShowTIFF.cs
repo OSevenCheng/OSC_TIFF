@@ -10,13 +10,13 @@ public class ShowTIFF : MonoBehaviour {
 		//r.material= new Material(Shader.Find("Custom/QuadImage"));
 		Material m = r.material;
 		string FileName = Application.dataPath+ "/Data/2020_07_21_index_blue.tif";
+		//string FileName = Application.dataPath + "/Data/1.tif";
 		TIFF tiff = new TIFF();
 		tiff.Init(FileName);
 		//tiff.PrintInfo();
 		tiff.PrintInfo();
-	   Texture2D tex = tiff.GetUnityTexture();
+	    Texture2D tex = tiff.GetUnityTexture();
 		m.SetTexture("_MainTex",tex);
-		
 	}
 	
 	// Update is called once per frame
