@@ -19,7 +19,7 @@ namespace OSC_TIFF
 		static private byte[] Input;
 		static private int startPos;
 		static private byte[] Output;
-		static private int resIndex;
+		static private ulong resIndex;
 		static private int current=0;
 		static private int bitsCount = 0;
 		static string combine ="{0}{1}";
@@ -32,8 +32,8 @@ namespace OSC_TIFF
             current = 0;
 			resIndex = 0;
 		}
-		static int BufferSize = 0;
-		static public void CreateBuffer(int size)
+		static ulong BufferSize = 0;
+		static public void CreateBuffer(ulong size)
 		{
 			BufferSize=size;
 			Output = new byte[size];
