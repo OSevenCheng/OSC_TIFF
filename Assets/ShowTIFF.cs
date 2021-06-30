@@ -12,12 +12,13 @@ public class ShowTIFF : MonoBehaviour {
 		string FileName = Application.dataPath+ "/Data/2020_07_21_index_blue.tif";// R float32 LZW predictor==3
 		//string FileName = Application.dataPath + "/Data/1.tif";   // RGBA float32 LZW predictor==1
 		//string FileName = Application.dataPath + "/Data/2.tiff";  // RGB  uint8 LZW predictor==2
+		//string FileName = Application.dataPath + "/Data/50.tiff";   // RGB  uint8 LZW predictor==2
 		TIFF tiff = new TIFF();
 		tiff.Init(FileName);
-		//tiff.PrintInfo();
 		tiff.PrintInfo();
 	    Texture2D tex = tiff.GetUnityTexture();
 		m.SetTexture("_MainTex",tex);
+		transform.localScale = new Vector3((float)tex.width/(float)tex.height,1.0f,1.0f);
 	}
 	
 	// Update is called once per frame
