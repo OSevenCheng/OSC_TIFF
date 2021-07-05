@@ -135,12 +135,12 @@ namespace OSC_TIFF
 		{
 			for(int i = 0;i<code.Length;i++)
 			{
-				if(resIndex>=BufferSize)
-				{
-					Debug.Log(resIndex);
-					resIndex++;
-				}
-				else
+				// if(resIndex>=BufferSize)
+				// {
+				// 	//Debug.Log(resIndex);
+				// 	resIndex++;
+				// }
+				// else
 				Output[resIndex++] = (byte)code[i];
 			}
 			

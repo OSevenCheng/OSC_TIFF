@@ -7,49 +7,21 @@ using System.IO;
 
 namespace OSC_TIFF
 {
-    //public class Image_Type
-    //{
-    //    TextureFormat uFormat;
-    //    int samplerFormat;
-    //    int samplerCount;
-    //    int bitsPerSample;
-    //    public Image_Type(int _SamplerCount, int _SamplerFormat,int _BitsPerSample, TextureFormat _uFormat)
-    //    {
-    //        uFormat = _uFormat;
-    //        samplerFormat = _SamplerFormat;
-    //        samplerCount = _SamplerCount;
-    //        bitsPerSample = _BitsPerSample;
-    //    }
-    //}
     public class TIFF
     {
-        public TIFF()
-        {
-            //List<Image_Type> image_Types = new List<Image_Type>();
-            //image_Types.Add(new Image_Type(1, 1, 8, TextureFormat.R8));
-            //image_Types.Add(new Image_Type(1, 1, 16, TextureFormat.R16));
-            //image_Types.Add(new Image_Type(1, 3, 32, TextureFormat.RFloat));
 
-            //image_Types.Add(new Image_Type(3, 1,  8, TextureFormat.RGB24));
+        //Dictionary<ushort, HandleDE> handleDEs = new Dictionary<ushort, HandleDE>();
 
-            //image_Types.Add(new Image_Type(4, 1,  4, TextureFormat.RGBA4444));
-            //image_Types.Add(new Image_Type(4, 1,  8, TextureFormat.RGBA32));
-            //image_Types.Add(new Image_Type(4, 3, 16, TextureFormat.RGBAHalf));
-            //image_Types.Add(new Image_Type(4, 3, 32, TextureFormat.RGBAFloat));
-
-
-            FunctionArrayInit();
-        }
         Dictionary<int, HandlePredictor> handlePredictors = new Dictionary<int, HandlePredictor>();
         HandlePredictor handlePredictor;
         Dictionary<int, HandleCompression> handleCompressions = new Dictionary<int, HandleCompression>();
         HandleCompression handleCompression;
         HandleByteOrder[] handleByteOrders = new HandleByteOrder[2];
-        Dictionary<int, HandleSample> handleSamples=new Dictionary<int, HandleSample>();
+        Dictionary<int, HandleSample> handleSamples = new Dictionary<int, HandleSample>();
         HandleSample handleSample;
         Dictionary<int, HandleOrientation> handleOrientations = new Dictionary<int, HandleOrientation>();
         HandleOrientation handleOrientation;
-        void FunctionArrayInit()
+        void InitFunctionArray()
         {
             handlePredictors.Add(1, Predictor1);
             handlePredictors.Add(3, Predictor3);
@@ -77,13 +49,14 @@ namespace OSC_TIFF
         }
         void FunctionArrayUpdate()
         {
-            if(SampleFormat.Count==0)
-                SampleFormat.Add(1);//Default is 1
+            int sf = 1;
+            if (SampleFormat.Count != 0)
+                sf = SampleFormat.Value(0);//Default is 1
 
             //handleSample = handleSamples[SampleFormat[0]];
-            if (SampleFormat[0] == 1)
+            if (sf == 1)
             {
-                switch (BytesPerSample)
+                switch (_BytesPerSample)
                 {
                     case 1:
                         handleSample = SampleUInt8ToFloat; break;
@@ -95,9 +68,9 @@ namespace OSC_TIFF
                         throw new UnityException("暂不支持");//暂不支持
                 }
             }
-            else if(SampleFormat[0] == 2)
+            else if (sf == 2)
             {
-                switch (BytesPerSample)
+                switch (_BytesPerSample)
                 {
                     case 1:
                         handleSample = SampleInt8ToFloat; break;
@@ -109,7 +82,7 @@ namespace OSC_TIFF
                         throw new UnityException("暂不支持");//暂不支持
                 }
             }
-            else if (SampleFormat[0] == 3)
+            else if (sf == 3)
             {
                 handleSample = SampleFloat;
             }
@@ -118,9 +91,9 @@ namespace OSC_TIFF
                 throw new UnityException("暂不支持");//暂不支持
             }
 
-            if (Predictor==2)
+            if (Predictor.Value == 2)
             {
-                switch(BytesPerSample)
+                switch (_BytesPerSample)
                 {
                     case 1:
                         handlePredictor = Predictor2UInt8; break;
@@ -133,17 +106,120 @@ namespace OSC_TIFF
                 }
             }
             else
-                handlePredictor = handlePredictors[Predictor];
+                handlePredictor = handlePredictors[Predictor.Value];
 
-            if(Predictor==3)
+            if (Predictor.Value == 3)
             {
                 Debug.Log("不确定RowsPerStrip > 1的时候如何处理float predictor");
             }
 
-            handleCompression = handleCompressions[Compression];
-            handleOrientation = handleOrientations[Orientation];
+            handleCompression = handleCompressions[Compression.Value];
+            handleOrientation = handleOrientations[Orientation.Value];
         }
-        
+        public TIFF()
+        {
+            InitFunctionArray();
+        }
+        public Dictionary<ushort, DEBase> DEs = new Dictionary<ushort, DEBase>();
+        public DEInt ImageWidth = new DEInt(0);
+        public DEInt ImageLength = new DEInt(0);
+        private DEIntArray BitsPerSample = new DEIntArray();
+        private DEInt Compression = new DEInt(1);
+
+        ///Summary///
+        ///0 White is Zero
+        ///1 Black is Zero
+        ///
+        private DEInt PhotometricInterpretation = new DEInt(0);
+        private DEIntArray StripOffsets = new DEIntArray();
+        private DEInt Orientation = new DEInt(1);
+        private DEInt SamplesPerPixel = new DEInt(1);
+        private DEInt RowsPerStrip = new DEInt(UInt16.MaxValue);
+
+        private DEIntArray StripByteCounts = new DEIntArray();//For each strip, the number of bytes in that strip after any compression
+        private DERational XResolution = new DERational();
+        private DERational YResolution = new DERational();
+        private DEInt PlanarConfiguration = new DEInt(1);
+        private DEInt ResolutionUnit = new DEInt(2);
+        private DEInt FillOrder = new DEInt(1);
+        private DEString Software = new DEString();
+        private DEString DateTime = new DEString();
+        private DEString Artist = new DEString();
+        private DEInt Predictor = new DEInt(1);
+        private DEIntArray ColorMap = new DEIntArray();
+        private DEIntArray ExtraSamples = new DEIntArray();
+        private DEIntArray SampleFormat = new DEIntArray();//default is 1
+        private DEDoubleArray ModelPixelScaleTag = new DEDoubleArray();
+        private DEDoubleArray ModelTiepointTag = new DEDoubleArray(); //double 6*K
+        private DEIntArray GeoKeyDirectoryTag = new DEIntArray(); // short N>=4
+        private DEDoubleArray GeoDoubleParamsTag = new DEDoubleArray(); //double N
+        private DEStringArray GeoAsciiParamsTag = new DEStringArray(); //ASCII N
+        private DEStringArray GDAL_NODATA = new DEStringArray();// ASCII; //N
+
+        private void InitDEs()
+        {
+            DEBase.data = data;
+            //DEBase.ByteOrder = ByteOrder;
+            if(ByteOrder==1)
+            DEBase.byteToInt =DEBase.ByteOrderII;
+            else
+            DEBase.byteToInt =DEBase.ByteOrderMM;
+            DEs.Add(256, ImageWidth);
+            DEs.Add(257, ImageLength);
+            DEs.Add(258, BitsPerSample);
+            DEs.Add(259, Compression);
+            DEs.Add(262, PhotometricInterpretation);
+            DEs.Add(273, StripOffsets);
+            DEs.Add(274, Orientation);
+            DEs.Add(277, SamplesPerPixel);
+            DEs.Add(278, RowsPerStrip);
+            DEs.Add(279, StripByteCounts);
+            DEs.Add(282, XResolution);
+            DEs.Add(283, YResolution);
+            DEs.Add(284, PlanarConfiguration);
+            DEs.Add(296, ResolutionUnit);
+            DEs.Add(305, Software);
+            DEs.Add(306, DateTime);
+            DEs.Add(315, Artist);//
+            DEs.Add(317, Predictor);
+            DEs.Add(320, ColorMap);
+            DEs.Add(338, ExtraSamples);
+            DEs.Add(339, SampleFormat);
+
+            DEs.Add(33550, ModelPixelScaleTag);
+            DEs.Add(33922, ModelTiepointTag); //double 6*K
+            DEs.Add(34735, GeoKeyDirectoryTag); //short N>=4
+            DEs.Add(34736, GeoDoubleParamsTag);// double N
+            DEs.Add(34737, GeoAsciiParamsTag);// ASCII N
+            DEs.Add(42113, GDAL_NODATA);// ASCII); N
+        }
+        private void PostProcessDEs()
+        {
+
+            int _BitsPerPixel = 0;
+            for (int i = 0; i < BitsPerSample.Count; i++)
+            {
+                _BitsPerPixel += BitsPerSample.Value(i);
+            }
+            _BytesPerPixel = _BitsPerPixel / 8;
+            if (BitsPerSample.Count != 0)
+            {
+                if (_BitsPerPixel / BitsPerSample.Count != BitsPerSample.Value(0))
+                {
+                    Debug.Log(_BitsPerPixel);
+                     Debug.Log(BitsPerSample.Count);
+                     Debug.Log(BitsPerSample.Value(0));
+                    throw new UnityException("每个通道宽度不一致，暂不支持");
+                }
+                
+                    
+            }
+            else
+                throw new UnityException("BitsPerSample.Count==0");
+
+
+            _BytesPerSample = BitsPerSample.Value(0) / 8;
+        }
         //Unity Texture
         Texture2D tex;
 
@@ -151,62 +227,64 @@ namespace OSC_TIFF
 
         int ByteOrder;//true:II  false:MM
 
-        public int ImageWidth = 0;
-        public int ImageLength = 0;
-        public ulong PixelCount = 0;
-        public List<int> BitsPerSample = new List<int>();
-        public int BytesPerSample = 0;
-        public int SamplePerPixel = 0;
-        public bool SameBitsPerChannel = true;
-        public int PixelBytes = 0;
-        public int Compression = 0;
-        public ulong StripLength = 0;//解压后的条带长度
-        /// <summary>
-        /// 0 = WhiteIsZero. For bilevel and grayscale images: 0 is imaged as white. The maximum value is imaged as black. This is the normal value for Compression=2.
-        /// 1 = BlackIsZero. For bilevel and grayscale images: 0 is imaged as black. The maximum value is imaged as white. If this value is specified for Compression=2, the
-        /// image should display and print reversed.
-        /// </summary>
-        public int PhotometricInterpretation = 0;
 
 
-        public int Orientation = 1;
-        /// <summary>
-        ///For each strip, the byte offset of that strip
-        /// </summary>
-        public List<int> StripOffsets = new List<int>();//For each strip, the byte offset of that strip
+        // public int ImageWidth = 0;
+        // public int ImageLength = 0;
+        // public ulong PixelCount = 0;
+        // public List<int> BitsPerSample = new List<int>();
+        // public int BytesPerSample = 0;
+        // public int SamplePerPixel = 0;
+        // public bool SameBitsPerChannel = true;
+        // public int _BytesPerPixel = 0;
+        // public int Compression = 0;
+        // public ulong StripLength = 0;//解压后的条带长度
+        // /// <summary>
+        // /// 0 = WhiteIsZero. For bilevel and grayscale images: 0 is imaged as white. The maximum value is imaged as black. This is the normal value for Compression=2.
+        // /// 1 = BlackIsZero. For bilevel and grayscale images: 0 is imaged as black. The maximum value is imaged as white. If this value is specified for Compression=2, the
+        // /// image should display and print reversed.
+        // /// </summary>
+        // public int PhotometricInterpretation = 0;
 
-        /// <summary>
-        ///The number of rows in each strip (except possibly the last strip.)
-        ///For example, if ImageLength is 24, and RowsPerStrip is 10, then there are 3
-        ///strips, with 10 rows in the first strip, 10 rows in the second strip, and 4 rows in the
-        ///third strip. (The data in the last strip is not padded with 6 extra rows of dummy data.)
-        /// </summary>
-        public int RowsPerStrip = 0;
 
-        /// <summary>
-        ///For each strip, the number of bytes in that strip after any compression.
-        /// </summary>
-        public List<int> StripByteCounts = new List<int>();
-        public float XResolution = 0f;
-        public float YResolution = 0f;
+        // public int Orientation = 1;
+        // /// <summary>
+        // ///For each strip, the byte offset of that strip
+        // /// </summary>
+        // public List<int> StripOffsets = new List<int>();//For each strip, the byte offset of that strip
 
-        public int PlannarConfiguration = 1;
-        public int ResolutionUnit = 0;
-        public int Predictor = 0;
+        // /// <summary>
+        // ///The number of rows in each strip (except possibly the last strip.)
+        // ///For example, if ImageLength is 24, and RowsPerStrip is 10, then there are 3
+        // ///strips, with 10 rows in the first strip, 10 rows in the second strip, and 4 rows in the
+        // ///third strip. (The data in the last strip is not padded with 6 extra rows of dummy data.)
+        // /// </summary>
+        // public int RowsPerStrip = 0;
 
-        /// <summary>
-        //This field specifies how to interpret each data sample in a pixel. Possible values are:
-        // 1 = unsigned integer data
-        // 2 = two’s complement signed integer data
-        // 3 = IEEE floating point data [IEEE]
-        // 4 = undefined data format
-        /// </summary>
-        public List<int> SampleFormat = new List<int>();
-        public string DateTime = "";
-        public string Software = "";
+        // /// <summary>
+        // ///For each strip, the number of bytes in that strip after any compression.
+        // /// </summary>
+        // public List<int> StripByteCounts = new List<int>();
+        // public float XResolution = 0f;
+        // public float YResolution = 0f;
 
-        //GeoTiff
-        public double[] ModelPixelScaleTag = new double[] { 0.0, 0.0, 0.0 };
+        // public int PlanarConfiguration = 1;
+        // public int ResolutionUnit = 0;
+        // public int Predictor = 0;
+
+        // /// <summary>
+        // //This field specifies how to interpret each data sample in a pixel. Possible values are:
+        // // 1 = unsigned integer data
+        // // 2 = two’s complement signed integer data
+        // // 3 = IEEE floating point data [IEEE]
+        // // 4 = undefined data format
+        // /// </summary>
+        // public List<int> SampleFormat = new List<int>();
+        // public string DateTime = "";
+        // public string Software = "";
+
+        // //GeoTiff
+        // public double[] ModelPixelScaleTag = new double[] { 0.0, 0.0, 0.0 };
         public void Init(string path)
         {
             data = File.ReadAllBytes(path);
@@ -241,6 +319,8 @@ namespace OSC_TIFF
             if (Version != 42)
                 throw new UnityException("Not TIFF.");
 
+            InitDEs();
+
             return GetInt(4, 4);
         }
         public int DecodeIFD(ulong Pos)
@@ -253,6 +333,7 @@ namespace OSC_TIFF
                 DecodeDE(n);
                 n += 12;
             }
+            PostProcessDEs();
             //已获得每条扫描线位置，大小，压缩方式和数据类型，接下来进行解码
             FunctionArrayUpdate();
             DecodeStrips();
@@ -261,7 +342,7 @@ namespace OSC_TIFF
         }
         public void DecodeDE(ulong Pos)
         {
-            int TagIndex = GetInt(Pos, 2);
+            ushort TagIndex = (ushort)GetInt(Pos, 2);
             int TypeIndex = GetInt(Pos + 2, 2);
             int Count = GetInt(Pos + 4, 4);
             //Debug.Log("Tag: " + Tag(TagIndex) + " DataType: " + TypeArray[TypeIndex].name + " Count: " + Count);
@@ -274,139 +355,33 @@ namespace OSC_TIFF
 
             //再根据Tag把值读出来，保存起来
             GetDEValue(TagIndex, TypeIndex, Count, pData);
+
         }
-        private void GetDEValue(int TagIndex, int TypeIndex, int Count, ulong pdata)
+        int _BytesPerPixel = 0;
+        int _BytesPerSample = 0;
+        private void GetDEValue(ushort TagIndex, int TypeIndex, int Count, ulong pdata)
         {
             int typesize = TypeArray[TypeIndex].size;
-            switch (TagIndex)
-            {
-                case 254: break;//NewSubfileType
-                case 255: break;//SubfileType
-                case 256://ImageWidth
-                    ImageWidth = GetInt(pdata, typesize); break;
-                case 257://ImageLength
-                    ImageLength = GetInt(pdata, typesize); break;
-                case 258://BitsPerSample
-                    int temp = 0;
-                    int count = -1;
-                    for (int i = 0; i < Count; i++)
-                    {
-                        int v = GetInt(pdata + (ulong)(i * typesize), typesize);
-                        BitsPerSample.Add(v);
-                        PixelBytes += v / 8;
-                        if (v != temp)
-                            count++;
-                        temp = v;
-                    }
-                    if (count > 0)//三个通道大小不一致
-                    {
-                        throw new UnityException("三个通道大小不一致，暂不支持");//暂不支持
-                    }
-                    SamplePerPixel = BitsPerSample.Count;
-                    BytesPerSample = BitsPerSample[0] / 8;//不支持4-bits per channel
-                    if (BitsPerSample[0] < 8)
-                    {
-                        throw new UnityException("单个通道小于8bits,暂不支持");//暂不支持
-                    }
-                    break;
-                case 259: //Compression
-                    Compression = GetInt(pdata, typesize); break;
-                case 262: //PhotometricInterpretation //一般等于1，2基本不用，等于2就不解了
-                    PhotometricInterpretation = GetInt(pdata, typesize);
-                    if (PhotometricInterpretation == 3)
-                        throw new UnityException("PhotometricInterpretation暂不支持");//暂不支持
-                    break;
-                case 273://StripOffsets
-                    for (int i = 0; i < Count; i++)
-                    {
-                        int v = GetInt(pdata + (ulong)(i * typesize), typesize);
-                        StripOffsets.Add(v);
-                    }
-                    break;
-                case 274:
-                    Orientation = GetInt(pdata, typesize);
-                    break;//Orientation
-                case 277:
-                    SamplePerPixel = GetInt(pdata, typesize);
-                    break;//SamplesPerPixel
-                case 278://RowsPerStrip
-                    RowsPerStrip = GetInt(pdata, typesize); break;
-                case 279://StripByteCounts
-                    for (int i = 0; i < Count; i++)
-                    {
-                        int v = GetInt(pdata + (ulong)(i * typesize), typesize);
-                        StripByteCounts.Add(v);
-                    }
-                    break;
-                case 282: //XResolution
-                    XResolution = GetRational(pdata); break;
-                case 283://YResolution
-                    YResolution = GetRational(pdata); break;
-                case 284:
-                    PlannarConfiguration = GetInt(pdata, typesize);
-                    if (PlannarConfiguration != 1)
-                        throw new UnityException("PlannarConfiguration != 1 暂不支持");//暂不支持
-                    break;//ExtraSamplesbreak;//PlanarConfig
-                case 296://ResolutionUnit
-                    ResolutionUnit = GetInt(pdata, typesize); break;
-                case 305://Software
-                    Software = GetString(pdata, typesize); break;
-                case 306://DateTime
-                    DateTime = GetString(pdata, typesize); break;
-                case 315: break;//Artist
-                case 317: //Differencing Predictor
-                    Predictor = GetInt(pdata, typesize); break;
-                case 320:
-                    throw new UnityException("ColorMap暂不支持");//暂不支持
-                    break;//ExtraSamplesbreak;//ColorMap
-                case 338:
-                    //throw new UnityException("ExtraSamples暂不支持");//暂不支持
-                    break;//ExtraSamples
-                case 339: //SampleFormat
-                    for (int i = 0; i < Count; i++)
-                    {
-                        int v = GetInt(pdata + (ulong)(i * typesize), typesize);
-                        SampleFormat.Add(v);
-                    }
-                    break;
-                case 33550://ModelPixelScaleTag
-                    if (typesize != 8)
-                    {
-                        throw new UnityException("ModelPixelScaleTag not Double暂不支持");//暂不支持
-                    }
-                    for (int i = 0; i < Count; i++)
-                        ModelPixelScaleTag[i] = GetDouble(pdata + (ulong)(i * typesize));
-                    break;
-                case 33922://ModelTiepointTag double 6*K
+            if (DEs.ContainsKey(TagIndex))
+                DEs[TagIndex].SetValue(pdata, typesize, Count);
+            else
+                Debug.Log(TagIndex + " is not exist");
 
-                    break;
-                case 34735://GeoKeyDirectoryTag short N>=4
 
-                    break;
-                case 34736://GeoDoubleParamsTag double N
 
-                    break;
-                case 34737://GeoAsciiParamsTag ASCII N
-
-                    break;
-                case 42113://GDAL_NODATA ASCII N
-                    break;
-                default:
-                    Debug.LogError(TagIndex);
-                    break;
-            }
         }
+        
         private void DecodeStrips()
         {
-            if(ImageWidth>8192|| ImageLength> 8192)
+            if (ImageWidth.Value > 8192 || ImageLength.Value > 8192)
             {
                 throw new UnityException("too Large for Unity");//暂不支持
             }
-            tex = new Texture2D((int)ImageWidth, (int)ImageLength, TextureFormat.RGBAFloat, false);
-            
-            PixelCount = (ulong)ImageWidth * (ulong)ImageLength;
-            Color[] colors = new Color[PixelCount];
-            Debug.Log("PixelCount: "+PixelCount);
+            tex = new Texture2D((int)ImageWidth.Value, (int)ImageLength.Value, TextureFormat.RGBAFloat, false);
+
+            ulong _PixelCount = (ulong)ImageWidth.Value * (ulong)ImageLength.Value;
+            Color[] colors = new Color[_PixelCount];
+            //Debug.Log("PixelCount: " + _PixelCount);
 
             handleCompression(colors);
 
@@ -415,48 +390,63 @@ namespace OSC_TIFF
         }
         private delegate void HandleCompression(Color[] dst);
         private void Compression1(Color[] colors)
-        {
-            for (int y = 0; y < StripOffsets.Count; y++)
+        {//未测试
+            for (int stripIndex = 0; stripIndex < StripOffsets.Count; stripIndex++)
             {
-                byte[] Dval = data.Skip(StripOffsets[y]).Take(StripByteCounts[y]).ToArray();
-                for (int x = 0; x < ImageWidth * RowsPerStrip; x++)
+                int startPos = StripOffsets.Value(stripIndex);
+                int byteCount = StripByteCounts.Value(stripIndex);
+                int pixelCount = byteCount / _BytesPerPixel;
+                int Channel = BitsPerSample.Count;
+
+                for (int i = 0; i < pixelCount; i++)
                 {
-                    for (int c = 0; c < BitsPerSample.Count; c++)
+                    for (int c = 0; c < Channel; c++)
                     {
-                        tempRGBA[c] = handleSample(Dval, (ulong)(c * BytesPerSample));
+                        ulong index = (ulong)startPos + (ulong)(i * _BytesPerPixel + c * _BytesPerSample);
+                        tempRGBA[c] = handleSample(data, index);
                     }
-                    //tex.SetPixel(x,y,new Color(R,G,B,A));//可以一个像素一个像素的设置颜色，也可以先读出来再一起设置颜色
+                    int x = i % ImageWidth.Value;
+                    int y = stripIndex * RowsPerStrip.Value + i / ImageWidth.Value;
                     colors[handleOrientation(x, y)] = new Color(tempRGBA[0], tempRGBA[1], tempRGBA[2], tempRGBA[3]);
                 }
             }
         }
+        ulong DecodedStripLength = 0;
+        System.Diagnostics.Stopwatch lzwTime = new System.Diagnostics.Stopwatch();
+        System.Diagnostics.Stopwatch predictorTime = new System.Diagnostics.Stopwatch();
         private void Compression5(Color[] colors)
         {
-            StripLength = (ulong)ImageWidth * (ulong)RowsPerStrip * (ulong)PixelBytes;
-            CompressionLZW.CreateBuffer(StripLength);
+            DecodedStripLength = (ulong)ImageWidth.Value * (ulong)RowsPerStrip.Value * (ulong)_BytesPerPixel;
+            CompressionLZW.CreateBuffer(DecodedStripLength);
             for (int y = 0; y < StripOffsets.Count; y++)
             {
-                byte[] Dval = CompressionLZW.Decode(data, StripOffsets[y], StripByteCounts[y]);//原始数据//起始位置//读取长度
-                handlePredictor(Dval,colors,y);
+                lzwTime.Start();
+                byte[] Dval = CompressionLZW.Decode(data, StripOffsets.Value(y), StripByteCounts.Value(y));//原始数据//起始位置//读取长度
+                lzwTime.Stop();
+                predictorTime.Start();
+                handlePredictor(Dval, colors, y);
+                predictorTime.Stop();
             }
+            Debug.Log(string.Format("LZW使用时间 {0} ms", lzwTime.ElapsedMilliseconds));
+            Debug.Log(string.Format("Predictor使用时间 {0} ms", predictorTime.ElapsedMilliseconds));
         }
 
 
         float[] tempRGBA = new float[] { 0f, 0f, 0f, 1f };
-        private delegate void HandlePredictor(byte[] b,Color[] colors,int stripIndex);
+        private delegate void HandlePredictor(byte[] b, Color[] colors, int stripIndex);
         private void Predictor1(byte[] src, Color[] colors, int stripIndex)
         {
-            int y = stripIndex * RowsPerStrip;
-            int rowsInThisStrip = Mathf.Min(ImageLength-y,RowsPerStrip);
+            int y = stripIndex * RowsPerStrip.Value;
+            int rowsInThisStrip = Mathf.Min(ImageLength.Value - y, RowsPerStrip.Value);
             for (int rows = 0; rows < rowsInThisStrip; rows++)
             {
-                int start = ImageWidth * rows;
-                int end = ImageWidth * (rows + 1);
+                int start = ImageWidth.Value * rows;
+                int end = ImageWidth.Value * (rows + 1);
                 for (int x = start; x < end; x++)
                 {
                     for (int c = 0; c < BitsPerSample.Count; c++)
                     {
-                        tempRGBA[c] = handleSample(src, (ulong)x * (ulong)PixelBytes + (ulong)(c * BytesPerSample));
+                        tempRGBA[c] = handleSample(src, (ulong)x * (ulong)_BytesPerPixel + (ulong)(c * _BytesPerSample));
                     }
                     colors[handleOrientation(x - start, y + rows)] = new Color(tempRGBA[0], tempRGBA[1], tempRGBA[2], tempRGBA[3]);
                 }
@@ -464,39 +454,39 @@ namespace OSC_TIFF
         }
         private void Predictor2UInt8(byte[] src, Color[] colors, int stripIndex)
         {
-            int y = stripIndex * RowsPerStrip;
-            int rowsInThisStrip = Mathf.Min(ImageLength-y,RowsPerStrip);
+            int y = stripIndex * RowsPerStrip.Value;
+            int rowsInThisStrip = Mathf.Min(ImageLength.Value - y, RowsPerStrip.Value);
             for (int rows = 0; rows < rowsInThisStrip; rows++)
             {
                 byte[] RGBA = new byte[] { 0, 0, 0, 255 };
-                int start = ImageWidth * rows;
-                int end = ImageWidth * (rows + 1);
+                int start = ImageWidth.Value * rows;
+                int end = ImageWidth.Value * (rows + 1);
                 for (int x = start; x < end; x++)
                 {
                     for (int c = 0; c < BitsPerSample.Count; c++)
                     {
-                        byte newc = SampleUInt8(src, (ulong)x * (ulong)PixelBytes + (ulong)(c * BytesPerSample));
-                        RGBA[c] = (byte)((newc+ RGBA[c]) & 0xff);
+                        byte newc = SampleUInt8(src, (ulong)x * (ulong)_BytesPerPixel + (ulong)(c * _BytesPerSample));
+                        RGBA[c] = (byte)((newc + RGBA[c]) & 0xff);
                     }
-                    uint colindex = (uint)handleOrientation(x-start, y+ rows);
+                    uint colindex = (uint)handleOrientation(x - start, y + rows);
                     colors[colindex] = new Color(RGBA[0] / 255f, RGBA[1] / 255f, RGBA[2] / 255f, RGBA[3] / 255f);
                 }
             }
         }
         private void Predictor2UInt16(byte[] src, Color[] colors, int stripIndex)
         {
-            int y = stripIndex * RowsPerStrip;
-            int rowsInThisStrip = Mathf.Min(ImageLength-y,RowsPerStrip);
+            int y = stripIndex * RowsPerStrip.Value;
+            int rowsInThisStrip = Mathf.Min(ImageLength.Value - y, RowsPerStrip.Value);
             for (int rows = 0; rows < rowsInThisStrip; rows++)
             {
                 UInt16[] RGBA = new UInt16[] { 0, 0, 0, UInt16.MaxValue };
-                int start = ImageWidth * rows;
-                int end = ImageWidth * (rows + 1);
+                int start = ImageWidth.Value * rows;
+                int end = ImageWidth.Value * (rows + 1);
                 for (int x = start; x < end; x++)
                 {
                     for (int c = 0; c < BitsPerSample.Count; c++)
                     {
-                        UInt16 newc = SampleUInt16(src, (ulong)x * (ulong)PixelBytes + (ulong)(c * BytesPerSample));
+                        UInt16 newc = SampleUInt16(src, (ulong)x * (ulong)_BytesPerPixel + (ulong)(c * _BytesPerSample));
                         RGBA[c] = (UInt16)((newc + RGBA[c]) & 0xffff);
                     }
                     colors[handleOrientation(x - start, y + rows)] = new Color(RGBA[0] / 65535f, RGBA[1] / 65535f, RGBA[2] / 65535f, RGBA[3] / 65535f);
@@ -505,19 +495,19 @@ namespace OSC_TIFF
         }
         private void Predictor2UInt32(byte[] src, Color[] colors, int stripIndex)
         {
-            int y = stripIndex * RowsPerStrip;
-            int rowsInThisStrip = Mathf.Min(ImageLength-y,RowsPerStrip);
+            int y = stripIndex * RowsPerStrip.Value;
+            int rowsInThisStrip = Mathf.Min(ImageLength.Value - y, RowsPerStrip.Value);
             float max = UInt32.MaxValue;
             for (int rows = 0; rows < rowsInThisStrip; rows++)
             {
                 UInt32[] RGBA = new UInt32[] { 0, 0, 0, UInt32.MaxValue };
-                int start = ImageWidth * rows;
-                int end = ImageWidth * (rows + 1);
+                int start = ImageWidth.Value * rows;
+                int end = ImageWidth.Value * (rows + 1);
                 for (int x = start; x < end; x++)
                 {
                     for (int c = 0; c < BitsPerSample.Count; c++)
                     {
-                        UInt32 newc = SampleUInt32(src, (ulong)x * (ulong)PixelBytes + (ulong)(c * BytesPerSample));
+                        UInt32 newc = SampleUInt32(src, (ulong)x * (ulong)_BytesPerPixel + (ulong)(c * _BytesPerSample));
                         RGBA[c] = (UInt32)((newc + RGBA[c]) & 0xffff);
                     }
                     colors[handleOrientation(x - start, y + rows)] = new Color(RGBA[0] / max, RGBA[1] / max, RGBA[2] / max, RGBA[3] / max);
@@ -545,23 +535,24 @@ namespace OSC_TIFF
             // {
             //     for (int c = 0; c < BitsPerSample.Count; c++)
             //     {
-            //         tempRGBA[c] = handleSample(dst, (ulong)x * (ulong)PixelBytes + (ulong)(c * BytesPerSample));
+            //         tempRGBA[c] = handleSample(dst, (ulong)x * (ulong)_BytesPerPixel + (ulong)(c * BytesPerSample));
             //     }
             //     colors[handleOrientation(x, y)] = new Color(tempRGBA[0], tempRGBA[1], tempRGBA[2], tempRGBA[3]);
             // }
+            ulong spp = (ulong)SamplesPerPixel.Value;
 
-            int y = stripIndex * RowsPerStrip;
-            int rowsInThisStrip = Mathf.Min(ImageLength-y,RowsPerStrip);
+            int y = stripIndex * RowsPerStrip.Value;
+            int rowsInThisStrip = Mathf.Min(ImageLength.Value - y, RowsPerStrip.Value);
             for (int rows = 0; rows < rowsInThisStrip; rows++)
             {
-                ulong start = (ulong)ImageWidth *(ulong) rows* (ulong)PixelBytes;
-                ulong end =(ulong) ImageWidth *(ulong) (rows + 1)* (ulong)PixelBytes;
+                ulong start = (ulong)ImageWidth.Value * (ulong)rows * (ulong)_BytesPerPixel;
+                ulong end = (ulong)ImageWidth.Value * (ulong)(rows + 1) * (ulong)_BytesPerPixel;
 
-                for (ulong i = start; i < end - (ulong)SamplePerPixel; i++)
-                    src[(ulong)SamplePerPixel + i] = (byte)((src[(ulong)SamplePerPixel + i] + src[i]) & 0xff);
+                for (ulong i = start; i < end - (ulong)SamplesPerPixel.Value; i++)
+                    src[(ulong)spp + i] = (byte)((src[(ulong)spp + i] + src[i]) & 0xff);
 
-                byte[] dst = new byte[StripLength];
-                ulong len = (ulong)ImageWidth;// StripLength / BytesPerSample;
+                byte[] dst = new byte[DecodedStripLength];
+                ulong len = (ulong)ImageWidth.Value;// StripLength / BytesPerSample;
                 for (ulong i = 0, j = start; i < end; j++)
                 {
                     dst[i++] = src[j + len * 3];
@@ -569,11 +560,11 @@ namespace OSC_TIFF
                     dst[i++] = src[j + len];
                     dst[i++] = src[j];
                 }
-                for (int x = 0; x < ImageWidth * RowsPerStrip; x++)
+                for (int x = 0; x < ImageWidth.Value * RowsPerStrip.Value; x++)
                 {
                     for (int c = 0; c < BitsPerSample.Count; c++)
                     {
-                        tempRGBA[c] = handleSample(dst, (ulong)x * (ulong)PixelBytes + (ulong)(c * BytesPerSample));
+                        tempRGBA[c] = handleSample(dst, (ulong)x * (ulong)_BytesPerPixel + (ulong)(c * _BytesPerSample));
                     }
                     colors[handleOrientation(x, y)] = new Color(tempRGBA[0], tempRGBA[1], tempRGBA[2], tempRGBA[3]);
                 }
@@ -582,17 +573,17 @@ namespace OSC_TIFF
 
 
 
-        private delegate void HandleByteOrder(byte[] b, ulong startPos,int length);
+        private delegate void HandleByteOrder(byte[] b, ulong startPos, int length);
         byte[] byteTemp = new byte[8];
-        private void ByteOrderII(byte[] b, ulong startPos, int  length)
+        private void ByteOrderII(byte[] b, ulong startPos, int length)
         {
             for (int i = 0; i < length; i++)
-                byteTemp[i] = b[startPos+(ulong)i];
+                byteTemp[i] = b[startPos + (ulong)i];
         }
-        private void ByteOrderMM(byte[] b, ulong startPos,int  length)
+        private void ByteOrderMM(byte[] b, ulong startPos, int length)
         {
             for (int i = 0; i < length; i++)
-                byteTemp[i] = b[startPos + (ulong)(length - 1 -i)];
+                byteTemp[i] = b[startPos + (ulong)(length - 1 - i)];
         }
 
 
@@ -635,38 +626,38 @@ namespace OSC_TIFF
         }
         private float SampleFloat(byte[] b, ulong startPos)
         {
-            handleByteOrders[ByteOrder](b, startPos,BytesPerSample); 
+            handleByteOrders[ByteOrder](b, startPos, _BytesPerSample);
             float fTemp = BitConverter.ToSingle(byteTemp, 0);
             return fTemp;
         }
         private byte SampleUInt8(byte[] b, ulong startPos)//不归一化
         {
-            handleByteOrders[ByteOrder](b, startPos, BytesPerSample);
+            handleByteOrders[ByteOrder](b, startPos, _BytesPerSample);
             return byteTemp[0];
         }
         private UInt16 SampleUInt16(byte[] b, ulong startPos)//不归一化
         {
-            handleByteOrders[ByteOrder](b, startPos, BytesPerSample);
+            handleByteOrders[ByteOrder](b, startPos, _BytesPerSample);
             return BitConverter.ToUInt16(byteTemp, 0);
         }
         private UInt32 SampleUInt32(byte[] b, ulong startPos)//不归一化
         {
-            handleByteOrders[ByteOrder](b, startPos, BytesPerSample);
+            handleByteOrders[ByteOrder](b, startPos, _BytesPerSample);
             return BitConverter.ToUInt32(byteTemp, 0);
         }
         private char SampleInt8(byte[] b, ulong startPos)//不归一化
         {
-            handleByteOrders[ByteOrder](b, startPos, BytesPerSample);
+            handleByteOrders[ByteOrder](b, startPos, _BytesPerSample);
             return (char)byteTemp[0];
         }
         private Int16 SampleInt16(byte[] b, ulong startPos)//不归一化
         {
-            handleByteOrders[ByteOrder](b, startPos, BytesPerSample);
+            handleByteOrders[ByteOrder](b, startPos, _BytesPerSample);
             return BitConverter.ToInt16(byteTemp, 0);
         }
         private Int32 SampleInt32(byte[] b, ulong startPos)//不归一化
         {
-            handleByteOrders[ByteOrder](b, startPos, BytesPerSample);
+            handleByteOrders[ByteOrder](b, startPos, _BytesPerSample);
             return BitConverter.ToInt32(byteTemp, 0);
         }
 
@@ -674,105 +665,105 @@ namespace OSC_TIFF
         private ulong Orientation1(int src_x, int src_y)
         {
             ulong x = (ulong)src_x;
-            ulong y = (ulong)(ImageLength - 1 - src_y);
-            return x + y * (ulong)ImageWidth;
-            
+            ulong y = (ulong)(ImageLength.Value - 1 - src_y);
+            return x + y * (ulong)ImageWidth.Value;
+
         }
         private ulong Orientation2(int src_x, int src_y)
         {
-            ulong x = (ulong)(ImageWidth - 1 - src_x);
-            ulong y = (ulong)(ImageLength - 1 - src_y);
-            return x + y * (ulong)ImageWidth;
+            ulong x = (ulong)(ImageWidth.Value - 1 - src_x);
+            ulong y = (ulong)(ImageLength.Value - 1 - src_y);
+            return x + y * (ulong)ImageWidth.Value;
         }
         private ulong Orientation3(int src_x, int src_y)
         {
-            ulong x = (ulong)(ImageWidth - 1 - src_x);
+            ulong x = (ulong)(ImageWidth.Value - 1 - src_x);
             ulong y = (ulong)src_y;
-            return x + y * (ulong)ImageWidth;
+            return x + y * (ulong)ImageWidth.Value;
         }
         private ulong Orientation4(int src_x, int src_y)
         {
             ulong x = (ulong)src_x;
             ulong y = (ulong)src_y;
-            return x + y * (ulong)ImageWidth;
+            return x + y * (ulong)ImageWidth.Value;
         }
         private ulong Orientation5(int src_x, int src_y)
         {
             ulong x = (ulong)src_x;
-            ulong y = (ulong)(ImageLength - 1 - src_y);
-            return x * (ulong)ImageLength + y;
+            ulong y = (ulong)(ImageLength.Value - 1 - src_y);
+            return x * (ulong)ImageLength.Value + y;
         }
         private ulong Orientation6(int src_x, int src_y)
         {
-            ulong x = (ulong)(ImageWidth - 1 - src_x);
-            ulong y = (ulong)(ImageLength - 1 - src_y);
-            return x * (ulong)ImageLength + y;
+            ulong x = (ulong)(ImageWidth.Value - 1 - src_x);
+            ulong y = (ulong)(ImageLength.Value - 1 - src_y);
+            return x * (ulong)ImageLength.Value + y;
         }
         private ulong Orientation7(int src_x, int src_y)
         {
-            ulong x = (ulong)(ImageWidth - 1 - src_x);
+            ulong x = (ulong)(ImageWidth.Value - 1 - src_x);
             ulong y = (ulong)src_y;
-            return x * (ulong)ImageLength + y;
+            return x * (ulong)ImageLength.Value + y;
         }
         private ulong Orientation8(int src_x, int src_y)
         {
             ulong x = (ulong)src_x;
             ulong y = (ulong)src_y;
-            return x * (ulong)ImageLength + y;
+            return x * (ulong)ImageLength.Value + y;
         }
         public void PrintInfo()
         {
             Debug.Log("ByteOrder: " + ByteOrder);
-            Debug.Log("ImageWidth: " + ImageWidth);
-            Debug.Log("ImageLength: " + ImageLength);
+            Debug.Log("ImageWidth: " + ImageWidth.Value);
+            Debug.Log("ImageLength: " + ImageLength.Value);
             string tmp = "";
             for (int i = 0; i < BitsPerSample.Count; i++)
             {
-                tmp += BitsPerSample[i];
+                tmp += BitsPerSample.Value(i);
                 tmp += " ";
             }
             Debug.Log("BitsPerSample: " + tmp);
-            Debug.Log("Compression: " + Compression);
-            Debug.Log("PhotometricInterpretation: " + PhotometricInterpretation);
-            tmp = "";
-            for (int i = 0; i < StripOffsets.Count; i++)
-            {
-                tmp += StripOffsets[i];
-                tmp += " ";
-            }
-            Debug.Log("StripOffsets: " + tmp);
-            Debug.Log("RowsPerStrip: " + RowsPerStrip);
-            tmp = "";
-            for (int i = 0; i < StripByteCounts.Count; i++)
-            {
-                tmp += StripByteCounts[i];
-                tmp += " ";
-            }
-            Debug.Log("StripByteCounts: " + tmp);
-            Debug.Log("XResolution: " + XResolution);
-            Debug.Log("YResolution: " + YResolution);
-            Debug.Log("ResolutionUnit: " + ResolutionUnit);
-            Debug.Log("Predictor: " + Predictor);
+            Debug.Log("Compression: " + Compression.Value);
+            Debug.Log("PhotometricInterpretation: " + PhotometricInterpretation.Value);
+            // tmp = "";
+            // for (int i = 0; i < StripOffsets.Count; i++)
+            // {
+            //     tmp += StripOffsets.Value(i);
+            //     tmp += " ";
+            // }
+            // Debug.Log("StripOffsets: " + tmp);
+            Debug.Log("RowsPerStrip: " + RowsPerStrip.Value);
+            // tmp = "";
+            // for (int i = 0; i < StripByteCounts.Count; i++)
+            // {
+            //     tmp += StripByteCounts.Value(i);
+            //     tmp += " ";
+            // }
+            // Debug.Log("StripByteCounts: " + tmp);
+            Debug.Log("XResolution: " + XResolution.Value);
+            Debug.Log("YResolution: " + YResolution.Value);
+            Debug.Log("ResolutionUnit: " + ResolutionUnit.Value);
+            Debug.Log("Predictor: " + Predictor.Value);
             tmp = "";
             for (int i = 0; i < SampleFormat.Count; i++)
             {
-                tmp += SampleFormat[i];
+                tmp += SampleFormat.Value(i);
                 tmp += " ";
             }
             Debug.Log("SampleFormat: " + tmp);
-            Debug.Log("PlannarConfiguration: " + PlannarConfiguration);
-            Debug.Log("SamplePerPixel: " + SamplePerPixel);
+            Debug.Log("PlanarConfiguration: " + PlanarConfiguration.Value);
+            Debug.Log("SamplePerPixel: " + SamplesPerPixel.Value);
 
-            Debug.Log("ModelPixelScaleTag: " + ModelPixelScaleTag[0] + " " +
-                   ModelPixelScaleTag[1] + " " +
-                  ModelPixelScaleTag[2]);
-            Debug.Log("Orientation: " + Orientation);
+            // Debug.Log("ModelPixelScaleTag: " + ModelPixelScaleTag.Value(0) + " " +
+            //        ModelPixelScaleTag.Value(1) + " " +
+            //       ModelPixelScaleTag.Value(2));
+            Debug.Log("Orientation: " + Orientation.Value);
         }
         private int GetInt(ulong startPos, int Length)//读负数会有问题
         {
             int value = 0;
 
-            if (ByteOrder==1)// "II")
+            if (ByteOrder == 1)// "II")
                 for (int i = 0; i < Length; i++) value |= data[startPos + (ulong)i] << i * 8;
             else // "MM")
                 for (int i = 0; i < Length; i++) value |= data[startPos + (ulong)(Length - 1 - i)] << i * 8;
@@ -780,60 +771,6 @@ namespace OSC_TIFF
             return value;
         }
 
-        //private float ByteArrayToIntColor(byte[] b, int startPos, int Length)
-        //{
-        //    int value = 0;
-
-        //    if (ByteOrder)// "II")
-        //        for (int i = 0; i < Length; i++) value |= b[startPos + i] << i * 8;
-        //    else // "MM")
-        //        for (int i = 0; i < Length; i++) value |= b[startPos + Length - 1 - i] << i * 8;
-
-        //    return value/255f;
-        //}
-        //private float ByteArrayToFloatColor(byte[] b, int startPos, int Length)
-        //{
-        //    if (Length < 4)
-        //    {
-        //        throw new UnityException("浮点数不支持非 32 bits");
-        //    }
-                
-        //    byte[] byteTemp;
-        //    if (ByteOrder)// "II")
-        //        byteTemp = new byte[] { b[startPos], b[startPos + 1], b[startPos + 2], b[startPos + 3] };
-        //    else
-        //        byteTemp = new byte[] { b[startPos + 3], b[startPos + 2], b[startPos + 1], b[startPos] };
-        //    float fTemp = BitConverter.ToSingle(byteTemp, 0);
-
-        //    return fTemp;
-        //}
-        //private float ByteArrayToFloatColorPredict(byte[] b, int startPos, int Length)
-        //{
-        //    if (Length < 4)
-        //    {
-        //        throw new UnityException("浮点数不支持非 32 bits");
-        //    }
-
-        //    byte[] byteTemp;
-        //    if (!ByteOrder)// "II")
-        //        byteTemp = new byte[] { b[startPos], b[startPos + ImageWidth], b[startPos + 2*ImageWidth], b[startPos + 3*ImageWidth] };
-        //    else
-        //        byteTemp = new byte[] { b[startPos + 3 * ImageWidth], b[startPos + 2 * ImageWidth], b[startPos + ImageWidth], b[startPos] };
-        //    float fTemp = BitConverter.ToSingle(byteTemp, 0);
-
-        //    return fTemp;
-        //}
-        //private int GetInt(byte[] b, int startPos, int Length)
-        //{
-        //    int value = 0;
-
-        //    if (ByteOrder)// "II")
-        //        for (int i = 0; i < Length; i++) value |= b[startPos + i] << i * 8;
-        //    else // "MM")
-        //        for (int i = 0; i < Length; i++) value |= b[startPos + Length - 1 - i] << i * 8;
-
-        //    return value;
-        //}
         private float GetRational(ulong startPos)
         {
             int A = GetInt(startPos, 4);
@@ -842,13 +779,13 @@ namespace OSC_TIFF
         }
         private float GetFloat(byte[] b, ulong startPos)
         {
-            handleByteOrders[ByteOrder](b, startPos,4);
+            handleByteOrders[ByteOrder](b, startPos, 4);
             float fTemp = BitConverter.ToSingle(byteTemp, 0);
             return fTemp;
         }
         private double GetDouble(ulong startPos)
         {
-            handleByteOrders[ByteOrder](data, startPos,8);
+            handleByteOrders[ByteOrder](data, startPos, 8);
             double fTemp = BitConverter.ToDouble(byteTemp, 0);
             return fTemp;
         }
@@ -884,28 +821,6 @@ namespace OSC_TIFF
             public string name;
             public int size;
         }
-     
-        //用来输出
-        // static private string[] TagArray = {//254
-        //         "NewSubfileType","SubfileType","ImageWidth","ImageLength","BitsPerSample","Compression",
-        //         "260","261","PhotometricInterpretation","263","264","265","266","267","268","269",
-        //         "270","271","272","StripOffsets","Orientation","275","276","SamplesPerPixel","RowsPerStrip","StripByteCounts",
-        //         "280","281","XResolution","YResolution","PlanarConfig","285","286","287","288","289",
-        //         "290","291","292","293","294","295","ResolutionUnit","297","298","299",
-        //         "300","301","302","303","304","Software","DateTime","307","308","309",
-        //         "310","311","312","313","314","Artist","316","Differencing Predictor","318","319",
-        //         "ColorDistributionTable","321","322","323","324","325","326","327","328","329",
-        //         "330","331","332","333","334","335","336","337","ExtraSamples","SampleFormat"
-        //     //"330","331","332","333","334","335","336","337","338","339",
-        //     };
-
-        // static private string Tag(int i)
-        // {
-        //     if (i <= 339)
-        //         return TagArray[i - 254];
-        //     else
-        //         return i.ToString();
-        // }
 
     }
 }
